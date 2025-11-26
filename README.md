@@ -15,7 +15,7 @@
 本插件并未更改原名，只需更换上游源并强制拉取即可：
 
 ```bash
-mv -r gsuid_core/gsuid_core/plugins/WutheringWavesUID ./WutheringWavesUID_bak
+mv gsuid_core/gsuid_core/plugins/WutheringWavesUID ./WutheringWavesUID_bak
 cd gsuid_core/gsuid_core/plugins/
 git clone https://github.com/Loping151/XutheringWavesUID.git WutheringWavesUID
 ```

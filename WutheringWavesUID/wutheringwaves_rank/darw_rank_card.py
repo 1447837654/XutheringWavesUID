@@ -595,7 +595,10 @@ async def get_avatar(
                 pic_cache.set(qid, pic)
         else:
             pic = await get_qq_avatar(qid, size=100)
-            pic_cache.set(qid, pic)
+            if pic:
+                pic_cache.set(qid, pic)
+            else:
+                pic = await get_square_avatar(char_id)
         pic_temp = crop_center_img(pic, 120, 120)
 
         img = Image.new("RGBA", (180, 180))
