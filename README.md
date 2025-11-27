@@ -10,9 +10,7 @@
 
 另外：目前提供可在网页直接使用的web版，无需在社交软件上使用：[传送门](https://ngabbs.com/read.php?tid=45645691)
 
-国际服用户支持识别直出，同时支持小程序、官方面板截图：[用例](https://github.com/Loping151/ScoreEcho)
-
-本插件并未更改原名，只需更换上游源并强制拉取即可：
+国际服用户支持识别直出，同时支持小程序、官方面板截图：[用例](https://github.com/Loping151/ScoreEcho)，计划支持伤害计算功能。
 
 ```bash
 mv gsuid_core/gsuid_core/plugins/WutheringWavesUID ./WutheringWavesUID_bak
@@ -26,7 +24,7 @@ git clone https://github.com/Loping151/XutheringWavesUID.git
 git clone https://github.com/Loping151/XutheringWavesUID.git
 ``` 
 
-总排行数据库重建：群号 653696746。如果仅需要本地伤害计算而不希望打扰，可发邮件 wkl@loping151.com 申请token，支持较少的用户量。
+总排行数据库重建：群号 653696746。如果仅需要本地伤害计算而不希望打扰，可发邮件 wkl@loping151.com 申请计算服务token，支持较少的请求量和用户量，但完全足以小范围使用。
 
 ## 丨安装提醒
 
@@ -47,6 +45,7 @@ linux_x86_64: python3.10-3.13<br>
 linux_aarch64: python3.10-3.13<br>
 macos_intel: no<br>
 macos_apple: python3.10-3.13<br>
+android_termux(?): python3.12<br>
 
 ## 致谢
 - ⭐[Echo](https://github.com/tyql688)，无需多言
