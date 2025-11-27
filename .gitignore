@@ -364,7 +364,7 @@ StyleCopReport.xml
 *.tlog
 *.vspscc
 *.vssscc
-.builds
+.waves_builds
 *.pidb
 *.svclog
 *.scc
@@ -478,7 +478,7 @@ PublishScripts/
 
 # Microsoft Azure Build Output
 csx/
-*.build.csdef
+*.waves_build.csdef
 
 # Microsoft Azure Emulator
 ecf/
@@ -669,7 +669,7 @@ result.txt
 upload_file.py
 
 ### WW-DATA
-WutheringWavesUID/tools/ww_data
+XutheringWavesUID/tools/ww_data
 
 ### test.py
 *_test.py
@@ -681,8 +681,6 @@ condition-*.json
 
 wutheringwaves_import
 
-
-!WutheringWavesUID/utils/map/damage/*.so
-!WutheringWavesUID/utils/map/damage/*.pyd
-!WutheringWavesUID/utils/*.so
-!WutheringWavesUID/utils/*.pyd
+*.so
+*.pyd
+waves_build

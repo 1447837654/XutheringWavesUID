@@ -6,7 +6,7 @@
 
 ## 说明
 
-本插件为 [WutheringWavesUID](https://github.com/tyql688) 的封包版本，封装方式只防小人不防君子，旨在避免代码偷窃，顺便避免加强了评分和伤害计算的保护，以免更改模板导致的计算不一致问题。本插件将继续更新，对于不计划自己编写权重计算和伤害计算的用户，与之前没有任何区别。
+本插件为 [WutheringWavesUID](https://github.com/tyql688) 的构建版本，加强了评分和伤害计算的保护，以免更改模板导致的计算不一致问题。本插件将继续更新，对于不计划自己编写权重计算和伤害计算的用户，与之前没有任何区别。
 
 另外：目前提供可在网页直接使用的web版，无需在社交软件上使用：[传送门](https://ngabbs.com/read.php?tid=45645691)
 
@@ -26,7 +26,7 @@ git clone https://github.com/Loping151/XutheringWavesUID.git WutheringWavesUID
 git clone https://github.com/Loping151/XutheringWavesUID.git WutheringWavesUID
 ``` 
 
-总排行数据库重建：群号 653696746
+总排行数据库重建：群号 653696746。如果仅需要本地伤害计算而不希望打扰，可发邮件 wkl@loping151.com 申请token，支持较少的用户量。
 
 ## 丨安装提醒
 
