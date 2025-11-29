@@ -42,4 +42,4 @@ if Path(show_cfg_path).exists():
         show_cfg_text = show_cfg_text.replace('WutheringWavesUID', 'XutheringWavesUID')
         with open(show_cfg_path, 'w', encoding='utf-8') as f:
             f.write(show_cfg_text)
-        Path(MAIN_PATH / 'config_backup.json').unlink()
+        Path(MAIN_PATH / 'show_config_back.json').unlink()
