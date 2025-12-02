@@ -14,7 +14,7 @@ PLAYERS_PATH = DATA_PATH / 'XutheringWavesUID' / 'players'
 BACKUP_PATH = DATA_PATH / 'backup'
 if PLAYERS_PATH.exists():
     BACKUP_PATH.mkdir(parents=True, exist_ok=True)
-    pattern = re.compile(r'^\d+_\d+$')
+    pattern = re.compile(r'^\d+_\d+')
     for item in PLAYERS_PATH.iterdir():
         if item.is_dir() and pattern.match(item.name):
             try:
