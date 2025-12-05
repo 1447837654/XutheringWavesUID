@@ -99,11 +99,11 @@ async def fetch_mcgf_data(uid: str):
             async with session.get(url, params=params, headers=headers, timeout=30) as response:
                 if response.status == 200:
                     data = await response.json()
-                    if data.get("uid"):
+                    if data.get("data", {}).get("uid"):
                         logger.success(f"[GachaHandler] 获取工坊数据成功 UID: {uid}")
                         return data
                     else:
-                        logger.warning(f"[GachaHandler] 获取工坊数据失败 UID: {uid} 返回数据异常")
+                        logger.warning(f"[GachaHandler] 获取工坊数据失败 UID: {uid} 返回数据异常：{str(data)[:500]}")
                 else:
                     logger.warning(f"[GachaHandler] 获取工坊数据失败 Status: {response.status}")
     except Exception as e:
