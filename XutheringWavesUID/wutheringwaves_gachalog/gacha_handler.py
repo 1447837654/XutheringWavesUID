@@ -192,9 +192,19 @@ def merge_gacha_data(original_data: dict, latest_data: dict) -> dict:
         L_5s.reverse()
         
         O_5s = [x for x in O_all if x.get('qualityLevel') == 5]
-        
+
+        if O_5s:
+            oldest_local_time = _time_to_timestamp(O_5s[0]['time'])
+            L_5s_filtered = [
+                x for x in L_5s
+                if _time_to_timestamp(x['time']) < oldest_local_time
+            ]
+            logger.debug(f"[GachaHandler] Pool {pool_id}: 本地最旧五星时间 {O_5s[0]['time']}, "
+                        f"过滤后保留 {len(L_5s_filtered)}/{len(L_5s)} 条工坊记录")
+            L_5s = L_5s_filtered
+
         pool_merged_items = []
-        
+
         if not O_5s:
             logger.debug(f"[GachaHandler] Pool {pool_id}: 无本地五星记录，重建所有历史")
             for cp in L_5s:
