@@ -8,6 +8,7 @@ from gsuid_core.utils.download_resource.download_core import download_all_file
 from .RESOURCE_PATH import (
     MAP_PATH,
     BUILD_PATH,
+    BUILD_TEMP,
     AVATAR_PATH,
     WEAPON_PATH,
     PHANTOM_PATH,
@@ -17,6 +18,7 @@ from .RESOURCE_PATH import (
     SHARE_BG_PATH,
     MAP_ALIAS_PATH,
     MAP_BUILD_PATH,
+    MAP_BUILD_TEMP,
     ROLE_PILE_PATH,
     XFM_GUIDE_PATH,
     XMU_GUIDE_PATH,
@@ -83,10 +85,10 @@ async def download_all_resource(force: bool = False):
     if force:
         import shutil
 
-        shutil.rmtree(BUILD_PATH, ignore_errors=True)
-        shutil.rmtree(MAP_BUILD_PATH, ignore_errors=True)
-        BUILD_PATH.mkdir(parents=True, exist_ok=True)
-        MAP_BUILD_PATH.mkdir(parents=True, exist_ok=True)
+        shutil.rmtree(BUILD_TEMP, ignore_errors=True)
+        shutil.rmtree(MAP_BUILD_TEMP, ignore_errors=True)
+        BUILD_TEMP.mkdir(parents=True, exist_ok=True)
+        MAP_BUILD_TEMP.mkdir(parents=True, exist_ok=True)
 
     await download_all_file(
         "XutheringWavesUID",
@@ -107,8 +109,8 @@ async def download_all_resource(force: bool = False):
             "resource/guide/XiaoYang": XIAOYANG_GUIDE_PATH,
             "resource/guide/WuHen": WUHEN_GUIDE_PATH,
             "resource/guide/XFM": XFM_GUIDE_PATH,
-            f"resource/build/{PLATFORM}/waves_build": BUILD_PATH,
-            f"resource/build/{PLATFORM}/map/waves_build": MAP_BUILD_PATH,
+            f"resource/build/{PLATFORM}/waves_build": BUILD_TEMP,
+            f"resource/build/{PLATFORM}/map/waves_build": MAP_BUILD_TEMP,
             "resource/map": MAP_PATH,
             "resource/map/character": MAP_CHAR_PATH,
             "resource/map/detail_json": MAP_DETAIL_PATH,
