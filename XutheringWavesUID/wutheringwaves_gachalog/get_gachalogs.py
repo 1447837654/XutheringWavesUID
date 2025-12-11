@@ -50,18 +50,6 @@ gachalogs_history_meta = {
 ERROR_MSG_INVALID_LINK = "当前抽卡链接已经失效，请重新导入抽卡链接"
 
 
-def find_length(A, B) -> int:
-    """数组最长公共子串长度"""
-    n, m = len(A), len(B)
-    dp = [[0] * (m + 1) for _ in range(n + 1)]
-    ans = 0
-    for i in range(n - 1, -1, -1):
-        for j in range(m - 1, -1, -1):
-            dp[i][j] = dp[i + 1][j + 1] + 1 if A[i] == B[j] else 0
-            ans = max(ans, dp[i][j])
-    return ans
-
-
 # 找到两个数组中最长公共子串的下标
 def find_longest_common_subarray_indices(
     a: List[GachaLog], b: List[GachaLog]
@@ -130,8 +118,12 @@ async def get_new_gachalog(
             if log.cardPoolType != card_pool_type:
                 log.cardPoolType = card_pool_type
         link_source_data[gacha_name] = list(gacha_log)
-        old_length = find_length(full_data[gacha_name], gacha_log)
-        _add = gacha_log if old_length == 0 else gacha_log[:-old_length]
+        common_indices = find_longest_common_subarray_indices(full_data[gacha_name], gacha_log)
+        if not common_indices:
+            _add = gacha_log
+        else:
+            (_, _), (b_start, b_end) = common_indices
+            _add = gacha_log[:b_start]
         new[gacha_name] = _add + copy.deepcopy(full_data[gacha_name])
         new_count[gacha_name] = len(_add)
         await asyncio.sleep(1)
