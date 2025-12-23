@@ -184,9 +184,6 @@ async def send_waves_bind_uid_msg(bot: Bot, ev: Event):
             at_sender=at_sender,
         )
     elif "切换" in ev.command:
-        if not uid:
-            msg = f"[鸣潮] 该命令末尾需要跟正确的特征码!\n例如【{PREFIX}切换 123456789】"
-            return await bot.send((" " if at_sender else "") + msg, at_sender)
         retcode = await WavesBind.switch_uid_by_game(qid, ev.bot_id, uid)
         if retcode == 0:
             uid_list = await WavesBind.get_uid_list_by_game(qid, ev.bot_id)
