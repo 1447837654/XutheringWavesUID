@@ -80,7 +80,7 @@ async def send_waves_add_ck_msg(bot: Bot, ev: Event):
 @waves_del_ck.on_command(("删除ck", "删除CK", "删除Token", "删除token", "删除TOKEN"), block=True)
 async def send_waves_del_ck_msg(bot: Bot, ev: Event):
     at_sender = True if ev.group_id else False
-    uid = ev.text.strip()
+    uid = ''.join(filter(str.isdigit, ev.text.strip()))
     if not uid or len(uid) != 9:
         msg = f"[鸣潮] 该命令末尾需要跟正确的特征码!\n例如【{PREFIX}删除token123456】"
         return await bot.send(
@@ -151,7 +151,7 @@ async def auto_delete_all_invalid_cookie():
     block=True,
 )
 async def send_waves_bind_uid_msg(bot: Bot, ev: Event):
-    uid = ev.text.strip().replace("uid", "").replace("UID", "")
+    uid = ''.join(filter(str.isdigit, ev.text.strip()))
     qid = ev.user_id
 
     at_sender = True if ev.group_id else False
@@ -184,6 +184,9 @@ async def send_waves_bind_uid_msg(bot: Bot, ev: Event):
             at_sender=at_sender,
         )
     elif "切换" in ev.command:
+        if not uid:
+            msg = f"[鸣潮] 该命令末尾需要跟正确的特征码!\n例如【{PREFIX}切换 123456789】"
+            return await bot.send((" " if at_sender else "") + msg, at_sender)
         retcode = await WavesBind.switch_uid_by_game(qid, ev.bot_id, uid)
         if retcode == 0:
             uid_list = await WavesBind.get_uid_list_by_game(qid, ev.bot_id)
