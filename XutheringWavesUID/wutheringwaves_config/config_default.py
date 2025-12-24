@@ -103,7 +103,7 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
         False,
     ),
     "ResourceDownloadTime": GsListStrConfig(
-        "自动源更新时间设置 重启生效",
+        "自动资源更新时间设置 重启生效",
         "每天自动下载全部资源时间设置（时，分），将在该时间点后一小时内随机时间下载资源，注意可能伴随重启，请避开自动签到",
         ["22", "0"],
     ),
