@@ -527,7 +527,7 @@ class RoleCultivateSkillLevel(BaseModel):
     level: int
 
 
-class RoleCultivateStatus(BaseModel):
+class RoleCultivateStatus(BaseModel): # 这里暂时没有谐度破坏
     """角色培养状态
     {
         "roleId": 1107,
