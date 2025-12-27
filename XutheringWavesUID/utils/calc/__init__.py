@@ -7,6 +7,5 @@ def __getattr__(name):
             globals()["WuWaCalc"] = WuWaCalc
             return WuWaCalc
         except ImportError:
-            logger.error("请等待下载完成")
             return None
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
