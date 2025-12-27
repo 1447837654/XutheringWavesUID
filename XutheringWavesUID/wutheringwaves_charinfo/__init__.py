@@ -21,7 +21,12 @@ from .upload_card import (
     delete_all_custom_card,
     compress_all_custom_card,
 )
-from .card_utils import send_custom_card_single, send_repeated_custom_cards
+from .card_utils import (
+    ocr_hash_id_from_event,
+    send_custom_card_single,
+    send_custom_card_single_by_id,
+    send_repeated_custom_cards,
+)
 
 waves_upload_char = SV("waves上传面板图", priority=3, pm=1)
 waves_char_card_single = SV("waves查看面板图", priority=3)
@@ -29,7 +34,7 @@ waves_char_card_list = SV("waves面板图列表", priority=3, pm=1)
 waves_delete_char_card = SV("waves删除面板图", priority=3, pm=1)
 waves_delete_all_card = SV("waves删除全部面板图", priority=5, pm=1)
 waves_compress_card = SV("waves面板图压缩", priority=5, pm=1)
-waves_repeated_card = SV("waves面板图查重", priority=3, pm=1)
+waves_repeated_card = SV("waves面板图查重", priority=2, pm=1)
 waves_new_get_char_info = SV("waves新获取面板", priority=3)
 waves_new_get_one_char_info = SV("waves新获取单个角色面板", priority=3)
 waves_new_char_detail = SV("waves新角色面板", priority=4)
@@ -133,15 +138,26 @@ async def repeated_char_card(bot: Bot, ev: Event):
 
 
 @waves_char_card_single.on_regex(
-    rf"^查看(?P<char>{PATTERN})(?P<type>面板|面包|🍞|card|体力|每日|mr|背景|bg)图(?P<hash_id>[a-zA-Z0-9]+)$",
+    rf"^(查看|提取)(?P<char>{PATTERN})?(?P<type>面板|面包|🍞|card|体力|每日|mr|背景|bg)图(?P<hash_id>[a-zA-Z0-9]+)?$",
     block=True,
 )
 async def get_char_card_single(bot: Bot, ev: Event):
     char = ev.regex_dict.get("char")
     hash_id = ev.regex_dict.get("hash_id")
-    if not char or not hash_id:
-        return
-    await send_custom_card_single(
+    if not hash_id:
+        at_sender = True if ev.group_id else False
+        hash_id = await ocr_hash_id_from_event(ev)
+        if not hash_id:
+            msg = "[鸣潮] 未找到图像id，请提供id。"
+            return await bot.send((" " if at_sender else "") + msg, at_sender)
+    if not char:
+        return await send_custom_card_single_by_id(
+            bot,
+            ev,
+            hash_id,
+            target_type=TYPE_MAP.get(ev.regex_dict.get("type"), "card"),
+        )
+    return await send_custom_card_single(
         bot,
         ev,
         char,

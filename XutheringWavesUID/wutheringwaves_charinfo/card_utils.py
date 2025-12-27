@@ -1,19 +1,46 @@
 import hashlib
 import os
+import re
+import ssl
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
-import cv2
+from PIL import Image, ImageOps
+
+
+def _import_cv2():
+    try:
+        import cv2  # type: ignore
+        return cv2
+    except Exception:
+        logger.warning("[鸣潮] 未安装opencv-python，请先安装后再使用查重功能。")
+        return None
+
+
+def _import_easyocr():
+    try:
+        import easyocr  # type: ignore
+        return easyocr
+    except Exception:
+        logger.warning("[鸣潮] 未安装easyocr，请先安装后再使用OCR识别。")
+        return None
+
+
+cv2 = _import_cv2()
+easyocr = _import_easyocr()
+
+import httpx
 
 from gsuid_core.bot import Bot
 from gsuid_core.logger import logger
 from gsuid_core.models import Event
 from gsuid_core.utils.image.convert import convert_img
 
-from ..utils.name_convert import alias_to_char_name, char_name_to_char_id
+from ..utils.name_convert import alias_to_char_name, char_name_to_char_id, easy_id_to_name
 from ..utils.resource.constant import SPECIAL_CHAR, SPECIAL_CHAR_ID
 from ..utils.resource.RESOURCE_PATH import (
     CUSTOM_CARD_PATH,
@@ -31,10 +58,24 @@ ORB_THRESHOLD = 0.7
 ORB_BLOCK_THRESHOLD = 0.9
 ORB_FEATURES = 2000
 
+CROP_LEFT = 435
+CROP_TOP = 262
+CROP_RIGHT = 530
+CROP_BOTTOM = 282
+OCR_LANGS = ["en"]
+OCR_ALLOWLIST = "0123456789abcdef"
+_OCR_READER = None
+
 CUSTOM_PATH_MAP = {
     "card": CUSTOM_CARD_PATH,
     "bg": CUSTOM_MR_BG_PATH,
     "stamina": CUSTOM_MR_CARD_PATH,
+}
+
+CUSTOM_PATH_NAME_MAP = {
+    "card": "面板",
+    "bg": "背景",
+    "stamina": "体力",
 }
 
 
@@ -83,6 +124,110 @@ def _relative_to_main(path: Path) -> str:
         return str(path)
 
 
+async def get_image(ev: Event) -> List[str]:
+    res = []
+    for content in ev.content:
+        if content.type == "img" and content.data and isinstance(content.data, str) and content.data.startswith("http"):
+            res.append(content.data)
+        elif (
+            content.type == "image"
+            and content.data
+            and isinstance(content.data, str)
+            and content.data.startswith("http")
+        ):
+            res.append(content.data)
+
+    if not res and ev.image:
+        res.append(ev.image)
+    return res
+
+
+def _get_ocr_reader():
+    global _OCR_READER
+    if _OCR_READER is None:
+        _OCR_READER = easyocr.Reader(OCR_LANGS, gpu=False, verbose=False)
+    return _OCR_READER
+
+
+def _otsu_binarize(gray: np.ndarray) -> np.ndarray:
+    hist, _ = np.histogram(gray.ravel(), bins=256, range=(0, 256))
+    total = gray.size
+    sum_total = np.dot(np.arange(256), hist)
+
+    sum_b, w_b, max_var, threshold = 0.0, 0.0, 0.0, 0
+    for i in range(256):
+        w_b += hist[i]
+        if w_b == 0:
+            continue
+        w_f = total - w_b
+        if w_f == 0:
+            break
+        sum_b += i * hist[i]
+        m_b = sum_b / w_b
+        m_f = (sum_total - sum_b) / w_f
+        var_between = w_b * w_f * (m_b - m_f) ** 2
+        if var_between > max_var:
+            max_var = var_between
+            threshold = i
+    return (gray > threshold).astype(np.uint8) * 255
+
+
+async def _fetch_image_bytes(url: str) -> Optional[bytes]:
+    try:
+        if httpx.__version__ >= "0.28.0":
+            ssl_context = ssl.create_default_context()
+            ssl_context.set_ciphers("DEFAULT")
+            async with httpx.AsyncClient(verify=ssl_context) as client:
+                res = await client.get(url)
+        else:
+            async with httpx.AsyncClient() as client:
+                res = await client.get(url)
+        if res.status_code != 200:
+            return None
+        return res.content
+    except Exception:
+        return None
+
+
+def _extract_hash_id(text: str) -> Optional[str]:
+    if not text:
+        return None
+    match = re.search(r"[a-fA-F0-9]{8}", text)
+    if match:
+        return match.group(0).lower()
+    return None
+
+
+async def ocr_hash_id_from_event(ev: Event) -> Optional[str]:
+    if easyocr is None:
+        logger.warning("[鸣潮] easyocr 未安装，无法使用OCR识别")
+        return None
+
+    urls = await get_image(ev)
+    if not urls:
+        return None
+
+    reader = _get_ocr_reader()
+    for url in urls:
+        image_bytes = await _fetch_image_bytes(url)
+        if not image_bytes:
+            continue
+        try:
+            image = Image.open(BytesIO(image_bytes)).convert("RGB")
+        except Exception:
+            continue
+        crop = image.crop((CROP_LEFT, CROP_TOP, CROP_RIGHT, CROP_BOTTOM))
+        crop = crop.resize((crop.width * 3, crop.height * 3), Image.Resampling.LANCZOS)
+        crop_rgb = np.array(crop)
+        result = reader.readtext(crop_rgb, detail=0, paragraph=True)
+        text = "".join(result).strip()
+        logger.info(f"[鸣潮] OCR识别结果: {text}")
+        hash_id = _extract_hash_id(text)
+        if hash_id:
+            return hash_id
+    return None
+
+
 def _shorten_rel_path(path: Path) -> str:
     rel = _relative_to_main(path)
     p = Path(rel)
@@ -91,6 +236,20 @@ def _shorten_rel_path(path: Path) -> str:
         short_stem = f"{stem[:4]}...{stem[-4:]}"
         return str(p.with_name(f"{short_stem}{p.suffix}"))
     return rel
+
+
+def find_hash_in_all_types(hash_id: str) -> List[Tuple[str, str, Path]]:
+    results: List[Tuple[str, str, Path]] = []
+    for t, base in CUSTOM_PATH_MAP.items():
+        if not base.exists():
+            continue
+        for char_dir in base.iterdir():
+            if not char_dir.is_dir():
+                continue
+            for f in _iter_images(char_dir):
+                if get_hash_id(f.name) == hash_id:
+                    results.append((t, char_dir.name, f))
+    return results
 
 
 def _get_orb_cache_path(image_path: Path) -> Optional[Path]:
@@ -146,6 +305,8 @@ def delete_orb_cache(image_path: Path) -> None:
 
 
 def _compute_orb_features(image_path: Path) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    if cv2 is None:
+        return None
     img = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
     if img is None:
         return None
@@ -183,6 +344,8 @@ def _orb_similarity(
     ratio: float = ORB_RATIO,
     min_matches: int = ORB_MIN_MATCHES,
 ) -> Optional[float]:
+    if cv2 is None:
+        return None
     pts1, des1 = feat1
     pts2, des2 = feat2
     if des1 is None or des2 is None:
@@ -319,6 +482,10 @@ async def send_repeated_custom_cards(
     threshold: float = ORB_THRESHOLD,
 ) -> None:
     at_sender = True if ev.group_id else False
+    if cv2 is None:
+        logger.warning("[鸣潮] opencv-python 未安装，无法使用重复图片查找功能。")
+        msg = "[鸣潮] 未安装opencv-python，无法使用重复图片查找功能！"
+        return await bot.send((" " if at_sender else "") + msg, at_sender)
     groups: List[Tuple[List[Path], Dict[Tuple[Path, Path], float]]] = []
     char_dirs: List[Path] = []
     for base in CUSTOM_PATH_MAP.values():
@@ -338,7 +505,8 @@ async def send_repeated_custom_cards(
             groups.extend(result)
 
     if not groups:
-        return await bot.send("[鸣潮] 未找到重复图片！", at_sender)
+        msg = "[鸣潮] 未找到重复图片！"
+        return await bot.send((" " if at_sender else "") + msg, at_sender)
 
     groups.sort(key=lambda g: len(g[0]), reverse=True)
     card_num = WutheringWavesConfig.get_config("CharCardNum").data
@@ -349,7 +517,7 @@ async def send_repeated_custom_cards(
 
     for group, sim_map in groups:
         group_sorted = sorted(group, key=lambda p: p.name)
-        lines = ["[重复组]"]
+        lines = []
         for p in group_sorted:
             rel = _shorten_rel_path(p)
             hash_id = get_hash_id(p.name)
@@ -368,6 +536,8 @@ async def send_repeated_custom_cards(
             lines.append("相似度:")
             lines.extend(pair_lines)
         text = "\n".join(lines)
+        if at_sender:
+            text = " " + text
 
         imgs = [await convert_img(p) for p in group_sorted]
         if len(imgs) > card_num:
@@ -375,9 +545,8 @@ async def send_repeated_custom_cards(
                 await bot.send(batch)
                 batch = []
                 batch_img_count = 0
-            await bot.send(
-                f"[鸣潮] 重复组图片数量({len(imgs)})超过单条上限({card_num})，将分条发送。"
-            )
+            msg = f"[鸣潮] 重复组图片数量({len(imgs)})超过单条上限({card_num})，将分条发送。"
+            await bot.send((" " if at_sender else "") + msg, at_sender)
             for i in range(0, len(imgs), card_num):
                 part_imgs = imgs[i : i + card_num]
                 await bot.send([text] + part_imgs)
@@ -407,9 +576,10 @@ async def send_custom_card_single(
     if msg:
         return await bot.send((" " if at_sender else "") + msg, at_sender)
 
+    type_label = CUSTOM_PATH_NAME_MAP.get(target_type, target_type)
     temp_dir = CUSTOM_PATH_MAP.get(target_type, CUSTOM_CARD_PATH) / f"{char_id}"
     if not temp_dir.exists():
-        msg = f"[鸣潮] 角色【{char}】暂未上传过{target_type}图！"
+        msg = f"[鸣潮] 角色【{char}】暂未上传过{type_label}图！"
         return await bot.send((" " if at_sender else "") + msg, at_sender)
 
     files_map = {
@@ -418,8 +588,60 @@ async def send_custom_card_single(
     }
 
     if hash_id not in files_map:
-        msg = f"[鸣潮] 角色【{char}】未找到id为【{hash_id}】的{target_type}图！"
+        matches = find_hash_in_all_types(hash_id)
+        if matches:
+            info = []
+            for t, other_char_id, _ in matches:
+                char_name = easy_id_to_name(other_char_id, other_char_id)
+                type_name = CUSTOM_PATH_NAME_MAP.get(t, t)
+                info.append(f"{char_name}的{type_name}图")
+            msg = (
+                f"[鸣潮] 角色【{char}】未找到id为【{hash_id}】的{type_label}图，"
+                f"但在以下位置找到：{'；'.join(info)}"
+            )
+            return await bot.send((" " if at_sender else "") + msg, at_sender)
+        msg = f"[鸣潮] 角色【{char}】未找到id为【{hash_id}】的{type_label}图！"
         return await bot.send((" " if at_sender else "") + msg, at_sender)
 
     img = await convert_img(files_map[hash_id])
+    await bot.send(img)
+
+
+async def send_custom_card_single_by_id(
+    bot: Bot,
+    ev: Event,
+    hash_id: str,
+    target_type: Optional[str] = None,
+) -> None:
+    at_sender = True if ev.group_id else False
+    matches = find_hash_in_all_types(hash_id)
+    filtered = matches
+    if target_type:
+        filtered = [m for m in matches if m[0] == target_type]
+
+    if not filtered:
+        if target_type and matches:
+            lines = [
+                f"[鸣潮] 未找到id为【{hash_id}】的{CUSTOM_PATH_NAME_MAP.get(target_type, target_type)}图，已在以下位置找到："
+            ]
+            for t, other_char_id, _ in matches:
+                char_name = easy_id_to_name(other_char_id, other_char_id)
+                type_name = CUSTOM_PATH_NAME_MAP.get(t, t)
+                lines.append(f"{char_name}的{type_name}图")
+            msg = "\n".join(lines)
+            return await bot.send((" " if at_sender else "") + msg, at_sender)
+        msg = f"[鸣潮] 未找到id为【{hash_id}】的图片！"
+        return await bot.send((" " if at_sender else "") + msg, at_sender)
+
+    if len(filtered) > 1:
+        lines = ["[鸣潮] 找到多个匹配，请指定角色："]
+        for t, other_char_id, _ in filtered:
+            char_name = easy_id_to_name(other_char_id, other_char_id)
+            type_name = CUSTOM_PATH_NAME_MAP.get(t, t)
+            lines.append(f"{char_name}的{type_name}图")
+        msg = "\n".join(lines)
+        return await bot.send((" " if at_sender else "") + msg, at_sender)
+
+    t, other_char_id, path = filtered[0]
+    img = await convert_img(path)
     await bot.send(img)
