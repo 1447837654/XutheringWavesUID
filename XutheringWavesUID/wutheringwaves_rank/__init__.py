@@ -22,7 +22,7 @@ async def send_rank_card(bot: Bot, ev: Event):
     char = ev.regex_dict.get("char")
 
     rank_type = "伤害"
-    if "评分" in char or "pf":
+    if "评分" in char or "pf" in char:
         rank_type = "评分"
 
     char = char.replace("伤害", "").replace("评分", "").replace("pf", "").replace("本群", "").replace("群", "")
