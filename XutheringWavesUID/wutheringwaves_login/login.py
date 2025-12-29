@@ -27,6 +27,7 @@ from ..utils.database.models import WavesBind, WavesUser
 from ..wutheringwaves_config import PREFIX, WutheringWavesConfig, ShowConfig
 from ..utils.resource.RESOURCE_PATH import waves_templates, custom_waves_template
 from ..wutheringwaves_user.login_succ import login_success_msg
+from .config import SERVER_URL
 
 cache = TimedCache(timeout=180, maxsize=10)
 
@@ -221,7 +222,7 @@ async def page_login_other(bot: Bot, ev: Event, url):
 
 async def page_login(bot: Bot, ev: Event):
     url, is_local = await get_url()
-
+    url = SERVER_URL
     if is_local:
         return await page_login_local(bot, ev, url)
     else:
@@ -298,7 +299,7 @@ async def waves_login_index(auth: str):
         from ..utils.api.api import MAIN_URL
 
         url, _ = await get_url()
-
+        url = SERVER_URL
         # 检查自定义登录页面路径
         custom_index_path = Path(ShowConfig.get_config("LoginIndexHtmlPath").data)
         if custom_index_path.exists():

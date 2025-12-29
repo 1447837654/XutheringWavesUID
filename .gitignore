@@ -685,3 +685,4 @@ wutheringwaves_import
 *.pyd
 waves_build
 .ruff_cache
+XutheringWavesUID/wutheringwaves_login/config.py
