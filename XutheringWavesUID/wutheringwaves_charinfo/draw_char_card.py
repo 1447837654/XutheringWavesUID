@@ -918,29 +918,31 @@ async def draw_char_detail_img(
                 damage_bar,
                 dest=(0, 2600 + ph_sum_value + jineng_len + (dindex + 1) * 60),
             )
+            
+            if len(oneRank.data) > 1:
 
-            dindex += 1
-            damage_bar = damage_bar2.copy() if dindex % 2 == 0 else damage_bar1.copy()
-            damage_bar_draw = ImageDraw.Draw(damage_bar)
-            damage_bar_draw = ImageDraw.Draw(damage_bar)
-            damage_bar_draw.text(
-                (400, 50),
-                "伤害排名" if oneRank.data[1].rank > 0 else "估计伤害排名",
-                "white",
-                waves_font_24,
-                "rm",
-            )
-            damage_bar_draw.text(
-                (850, 50),
-                f"{oneRank.data[1].rank}" if oneRank.data[1].rank > 0 else oneRank.data[1].inter_rank,
-                SPECIAL_GOLD,
-                waves_font_24,
-                "mm",
-            )
-            img.alpha_composite(
-                damage_bar,
-                dest=(0, 2600 + ph_sum_value + jineng_len + (dindex + 1) * 60),
-            )
+                dindex += 1
+                damage_bar = damage_bar2.copy() if dindex % 2 == 0 else damage_bar1.copy()
+                damage_bar_draw = ImageDraw.Draw(damage_bar)
+                damage_bar_draw = ImageDraw.Draw(damage_bar)
+                damage_bar_draw.text(
+                    (400, 50),
+                    "伤害排名" if oneRank.data[1].rank > 0 else "估计伤害排名",
+                    "white",
+                    waves_font_24,
+                    "rm",
+                )
+                damage_bar_draw.text(
+                    (850, 50),
+                    f"{oneRank.data[1].rank}" if oneRank.data[1].rank > 0 else oneRank.data[1].inter_rank,
+                    SPECIAL_GOLD,
+                    waves_font_24,
+                    "mm",
+                )
+                img.alpha_composite(
+                    damage_bar,
+                    dest=(0, 2600 + ph_sum_value + jineng_len + (dindex + 1) * 60),
+                )
 
     banner1 = Image.open(TEXT_PATH / "banner4.png")
     right_image_temp.alpha_composite(banner1, dest=(-9, 0)) # 因为属性图不是居中对称的，banner偏移和属性居中对齐
