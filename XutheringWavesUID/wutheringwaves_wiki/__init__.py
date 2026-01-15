@@ -68,11 +68,11 @@ async def send_waves_wiki(bot: Bot, ev: Event):
 async def send_role_guide_pic(bot: Bot, ev: Event):
     char_name = ev.regex_dict.get("char", "")
 
-    char_id = char_name_to_char_id(char_name)
-    at_sender = True if ev.group_id else False
-    if not char_id:
-        msg = f"[鸣潮] 角色名【{char_name}】无法找到, 可能暂未适配, 请先检查输入是否正确！\n"
-        return await bot.send(msg, at_sender)
+    # char_id = char_name_to_char_id(char_name)
+    # at_sender = True if ev.group_id else False
+    # if not char_id:
+    #     msg = f"[鸣潮] 角色名【{char_name}】无法找到, 可能暂未适配, 请先检查输入是否正确！\n"
+    #     return await bot.send(msg, at_sender)
 
     await get_guide(bot, ev, char_name)
 
