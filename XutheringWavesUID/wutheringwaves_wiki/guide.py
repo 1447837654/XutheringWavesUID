@@ -58,7 +58,7 @@ async def get_guide(bot: Bot, ev: Event, char_name: str):
             imgs_result.extend(imgs)
 
     if len(imgs_result) == 0:
-        msg = f"[鸣潮] 角色名【{char_name}】无法找到, 可能暂未适配, 请先检查输入是否正确！\n"
+        msg = f"[鸣潮] 攻略【{char_name}】无法找到, 可能暂未适配, 请先检查输入是否正确！\n"
         return await bot.send(msg)
 
     await send_guide(config, imgs_result, bot)
