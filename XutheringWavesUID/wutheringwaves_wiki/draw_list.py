@@ -189,6 +189,8 @@ async def draw_weapon_list(weapon_type: str):
 async def draw_sonata_list(version: str = ""):
     if not sonata_id_data:
         return "[鸣潮][套装列表]暂无数据"
+    
+    version = version.split(".")[0] + ".0"
 
     sonata_groups = defaultdict(list)
     for data in sonata_id_data.values():
