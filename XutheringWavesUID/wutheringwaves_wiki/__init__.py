@@ -87,9 +87,11 @@ async def send_weapon_list(bot: Bot, ev: Event):
     await bot.send(img)
 
 
-@sv_waves_guide.on_regex(r".*套装(列表)?$", block=True)
+@sv_waves_guide.on_regex(r"^(?:(?P<version_pre>\d+\.\d+))?套装(列表)?(?:(?P<version_post>\d+\.\d+))?$", block=True)
 async def send_sonata_list(bot: Bot, ev: Event):
-    await bot.send(await draw_sonata_list())
+    # 版本号可以在前面或后面
+    version = ev.regex_dict.get("version_pre") or ev.regex_dict.get("version_post") or ""
+    await bot.send(await draw_sonata_list(version))
 
 
 @sv_waves_tower.on_regex(

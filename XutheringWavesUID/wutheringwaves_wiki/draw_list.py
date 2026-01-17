@@ -186,29 +186,31 @@ async def draw_weapon_list(weapon_type: str):
     return await convert_img(img)
 
 
-async def draw_sonata_list():
-    # 确保数据已加载
+async def draw_sonata_list(version: str = ""):
     if not sonata_id_data:
         return "[鸣潮][套装列表]暂无数据"
 
-    # 收集所有声骸套装数据
     sonata_groups = defaultdict(list)
     for data in sonata_id_data.values():
         name = data.get("name", "未知套装")
         set_list = data.get("set", {})
-        # 按名称字数分组
         from_version = data.get("version", "10.0")
+
+        if version and from_version != version:
+            continue
+
         sonata_groups[from_version].append({"name": name, "set": set_list})
 
-    # 按字数从小到大排序
-    sorted_groups = sorted(sonata_groups.items(), key=lambda x: float(x[0]))
+    if version and not sonata_groups:
+        return f"[鸣潮][套装列表]未找到版本 {version} 的套装数据"
 
-    # 创建背景图（高度暂定，后面会调整）
+    sorted_groups = sorted(sonata_groups.items(), key=lambda x: float(x[0]), reverse=True)
+
     img = get_waves_bg(900, 3000, "bg6")
     draw = ImageDraw.Draw(img)
 
     # 绘制标题
-    title = "声骸套装一览"
+    title = f"声骸套装一览 - {version}版本" if version else "声骸套装一览"
     draw.text((440, 30), title, font=waves_font_24, fill=SPECIAL_GOLD, anchor="mt")
 
     # 当前绘制位置
