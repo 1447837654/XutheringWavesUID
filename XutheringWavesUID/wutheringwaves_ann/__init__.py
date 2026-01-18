@@ -253,7 +253,7 @@ async def clean_cache_directories(days: int) -> str:
     return result_msg
 
 
-@sv_ann_clear_cache.on_fullmatch(("删除公告缓存", "删除日历缓存", "清理缓存", "删除缓存"))
+@sv_ann_clear_cache.on_fullmatch(("清理缓存", "删除缓存"), block=True)
 async def clean_cache_(bot: Bot, ev: Event):
     """手动清理缓存指令"""
     days = WutheringWavesConfig.get_config("CacheDaysToKeep").data
