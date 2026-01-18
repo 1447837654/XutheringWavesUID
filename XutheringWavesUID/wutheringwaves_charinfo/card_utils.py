@@ -7,7 +7,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-import numpy as np
 from PIL import Image
 from gsuid_core.logger import logger
 
@@ -17,11 +16,20 @@ def _import_cv2():
         import cv2  # type: ignore
         return cv2
     except Exception:
-        logger.warning("[鸣潮] 未安装opencv-python，请先安装后再使用相关功能。")
+        logger.warning("[鸣潮] 未安装opencv-python，安装后可使用面板图重复判断、提取面板图等功能。")
+        logger.info("[鸣潮] 安装方法: 在当前目录下执行 uv pip install opencv-python")
+        return None
+    
+def _import_np():
+    try:
+        import numpy as np  # type: ignore
+        return np
+    except Exception:
         return None
 
 
 cv2 = _import_cv2()
+np = _import_np()
 
 import httpx
 
