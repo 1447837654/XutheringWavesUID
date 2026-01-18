@@ -33,6 +33,7 @@ from .RESOURCE_PATH import (
     MOEALKYNE_GUIDE_PATH,
     ROLE_DETAIL_SKILL_PATH,
     ROLE_DETAIL_CHAINS_PATH,
+    WIKI_CACHE_PATH,
 )
 
 async def check_speed(plugin_name):
@@ -155,9 +156,11 @@ async def download_all_resource(force: bool = False):
             shutil.rmtree(BUILD_TEMP, ignore_errors=True)
             shutil.rmtree(MAP_BUILD_TEMP, ignore_errors=True)
             shutil.rmtree(MAP_CHAR_PATH, ignore_errors=True)
+            shutil.rmtree(WIKI_CACHE_PATH, ignore_errors=True)
             BUILD_TEMP.mkdir(parents=True, exist_ok=True)
             MAP_BUILD_TEMP.mkdir(parents=True, exist_ok=True)
             MAP_CHAR_PATH.mkdir(parents=True, exist_ok=True)
+            WIKI_CACHE_PATH.mkdir(parents=True, exist_ok=True)
             
         plugin_name = "XutheringWavesUID"
         url, tag = await check_speed(plugin_name)
@@ -206,6 +209,7 @@ async def reload_all_modules():
     from ..limit_user_card import load_limit_user_card
     from ..calc import reload_wuwacalc_module
     from ..damage.damage import reload_damage_module
+    from ...wutheringwaves_wiki.char_wiki_render import clear_wiki_cache
 
     # 在下载完成后强制加载所有数据
     ensure_name_convert_loaded(force=True)
@@ -217,6 +221,7 @@ async def reload_all_modules():
     reload_wuwacalc_module()
     reload_damage_module()
     reload_all_register()
+    clear_wiki_cache()
     card_list = await load_limit_user_card()
     if card_list:
         logger.info(f"[鸣潮][加载角色极限面板] 数量: {len(card_list)}")

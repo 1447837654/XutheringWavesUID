@@ -14,7 +14,7 @@ from gsuid_core.subscribe import gs_subscribe
 from .ann_card_render import ann_list_card, ann_detail_card
 from ..utils.waves_api import waves_api
 from ..wutheringwaves_config import WutheringWavesConfig
-from ..utils.resource.RESOURCE_PATH import ANN_CARD_PATH, CALENDAR_PATH
+from ..utils.resource.RESOURCE_PATH import ANN_CARD_PATH, CALENDAR_PATH, WIKI_CACHE_PATH
 from ..utils.database.models import WavesSubscribe
 
 sv_ann = SV("鸣潮公告")
@@ -158,16 +158,6 @@ async def check_waves_ann_state():
 
 
 def clean_old_cache_files(directory: Path, days: int) -> tuple[int, float]:
-    """
-    清理指定目录下创建时间早于指定天数的文件
-
-    Args:
-        directory: 要清理的目录路径
-        days: 保留天数，早于此天数的文件将被删除
-
-    Returns:
-        tuple[int, float]: (删除的文件数量, 释放的空间大小(MB))
-    """
     if not directory.exists():
         logger.debug(f"目录不存在: {directory}")
         return 0, 0.0
@@ -202,16 +192,34 @@ def clean_old_cache_files(directory: Path, days: int) -> tuple[int, float]:
     return deleted_count, freed_space_mb
 
 
+def clean_all_cache_files(directory: Path):
+    deleted_count = 0
+    freed_space = 0.0
+
+    if not directory.exists():
+        return deleted_count, freed_space
+
+    try:
+        for file_path in directory.iterdir():
+            if not file_path.is_file():
+                continue
+
+            try:
+                file_size = file_path.stat().st_size
+                file_path.unlink()
+                deleted_count += 1
+                freed_space += file_size
+                logger.debug(f"删除缓存文件: {file_path.name}")
+            except Exception as e:
+                logger.error(f"删除文件失败 {file_path.name}: {e}")
+    except Exception as e:
+        logger.error(f"清理目录失败 {directory}: {e}")
+
+    freed_space_mb = freed_space / (1024 * 1024)  # 转换为MB
+    return deleted_count, freed_space_mb
+
+
 async def clean_cache_directories(days: int) -> str:
-    """
-    清理公告和日历缓存目录
-
-    Args:
-        days: 保留天数
-
-    Returns:
-        str: 清理结果消息
-    """
     results = []
     total_count = 0
     total_space = 0.0
@@ -230,8 +238,15 @@ async def clean_cache_directories(days: int) -> str:
         total_count += cal_count
         total_space += cal_space
 
+    # 清理wiki缓存（全部删除，不判断过期）
+    wiki_count, wiki_space = clean_all_cache_files(WIKI_CACHE_PATH)
+    if wiki_count > 0:
+        results.append(f"Wiki: {wiki_count}个文件, {wiki_space:.2f}MB")
+        total_count += wiki_count
+        total_space += wiki_space
+
     if total_count == 0:
-        return f"没有找到需要清理的过期缓存文件(保留{days}天内的文件)"
+        return f"没有找到需要清理的缓存文件(公告/日历保留{days}天内的文件，wiki全部删除)"
 
     result_msg = f"[鸣潮] 清理完成！共删除{total_count}个文件，{total_space:.2f}MB\n"
     result_msg += "\n".join(f" - {r}" for r in results)

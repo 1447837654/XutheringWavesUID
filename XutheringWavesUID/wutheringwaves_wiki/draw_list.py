@@ -15,6 +15,7 @@ from ..utils.image import (
     get_square_weapon,
     get_attribute_effect,
 )
+from ..utils.resource.constant import WEAPON_TYPE_ID_MAP
 from ..wutheringwaves_config import PREFIX
 from ..utils.ascension.sonata import sonata_id_data
 from ..utils.ascension.weapon import weapon_id_data
@@ -40,17 +41,10 @@ async def draw_weapon_list(weapon_type: str):
     if not weapon_id_data:
         return "[鸣潮][武器列表]暂无数据"
 
-    # 武器类型映射
-    weapon_type_map = {
-        1: "长刃",
-        2: "迅刀",
-        3: "佩枪",
-        4: "臂铠",
-        5: "音感仪",
-    }
+    weapon_type = weapon_type.replace("臂甲", "臂铠").replace("讯刀", "迅刀")
 
     # 创建反向映射（中文类型 → 数字类型）
-    reverse_type_map = {v: k for k, v in weapon_type_map.items()}
+    reverse_type_map = {v: k for k, v in WEAPON_TYPE_ID_MAP.items()}
     logger.debug(f"正在处理武器类型：{weapon_type}")
     logger.debug(f"正在处理武器列表：{reverse_type_map}")
 
@@ -113,7 +107,7 @@ async def draw_weapon_list(weapon_type: str):
     # 按武器类型遍历所有分组
     for weapon_type, weapons in sorted_groups:
         # 获取类型名称
-        type_name = weapon_type_map.get(weapon_type, f"未知类型{weapon_type}")
+        type_name = WEAPON_TYPE_ID_MAP.get(weapon_type, f"未知类型{weapon_type}")
 
         # 绘制类型标题
         draw.text((50, y_offset), type_name, font=waves_font_24, fill=SPECIAL_GOLD)
@@ -190,7 +184,8 @@ async def draw_sonata_list(version: str = ""):
     if not sonata_id_data:
         return "[鸣潮][套装列表]暂无数据"
     
-    version = version.split(".")[0] + ".0"
+    if version:
+        version = version.split(".")[0] + ".0"
 
     sonata_groups = defaultdict(list)
     for data in sonata_id_data.values():

@@ -1,110 +1,23 @@
 import time
-import base64
-from pathlib import Path
-from typing import List, Union, Optional
+from typing import List, Union
 from datetime import datetime
 
 from gsuid_core.logger import logger
 from ..utils.waves_api import waves_api
 from ..wutheringwaves_config import PREFIX
-from ..utils.resource.RESOURCE_PATH import waves_templates, TEMP_PATH
+from ..utils.resource.RESOURCE_PATH import waves_templates, ANN_CARD_PATH
+from ..utils.render_utils import (
+    PLAYWRIGHT_AVAILABLE,
+    get_logo_b64,
+    get_footer_b64,
+    get_image_b64_with_cache,
+    render_html,
+)
 
-def _import_playwright():
-    try:
-        from playwright.async_api import async_playwright
-        return async_playwright
-    except ImportError:
-        logger.warning("[鸣潮] 未安装 playwright，无法使用 HTML 渲染公告功能。")
-        logger.info("[鸣潮] 安装方法 Linux/Mac: 在当前目录下执行 source .venv/bin/activate && uv pip install playwright && uv run playwright install chromium")
-        logger.info("[鸣潮] 安装方法 Windows: 在当前目录下执行 .venv\Scripts\\activate; uv pip install playwright; uv run playwright install chromium")
-        return None
-
-async_playwright = _import_playwright()
-PLAYWRIGHT_AVAILABLE = async_playwright is not None
 
 from .ann_card import ann_list_card as ann_list_card_pil
 from .ann_card import ann_detail_card as ann_detail_card_pil
 from .ann_card import format_date
-
-def get_logo_b64() -> Optional[str]:
-    try:
-        logo_path = TEMP_PATH / "imgs" / "logo.png"
-        
-        if not logo_path.exists():
-            return None
-            
-        with open(logo_path, "rb") as f:
-            data = f.read()
-            return f"data:image/png;base64,{base64.b64encode(data).decode('utf-8')}"
-    except Exception as e:
-        logger.warning(f"[鸣潮] Logo loading failed: {e}")
-        return None
-
-def get_footer_b64() -> Optional[str]:
-    try:
-        current_file_path = Path(__file__).resolve()
-        footer_path = current_file_path.parent.parent / "utils" / "texture2d" / "footer_black.png"
-        
-        if not footer_path.exists():
-            footer_path = current_file_path.parent.parent / "utils" / "texture2d" / "footer_white.png"
-            
-        if not footer_path.exists():
-            return None
-            
-        with open(footer_path, "rb") as f:
-            data = f.read()
-            return f"data:image/png;base64,{base64.b64encode(data).decode('utf-8')}"
-    except Exception as e:
-        logger.warning(f"[鸣潮] Footer loading failed: {e}")
-        return None
-
-async def render_html(template_name: str, context: dict) -> Optional[bytes]:
-    if not PLAYWRIGHT_AVAILABLE or async_playwright is None:
-        return None
-
-    try:
-        logger.debug(f"[鸣潮] HTML渲染开始: {template_name}")
-        logger.debug(f"[鸣潮] async_playwright type: {type(async_playwright)}")
-        
-        try:
-            template = waves_templates.get_template(template_name)
-            html_content = template.render(**context)
-            logger.debug(f"[鸣潮] HTML渲染完成: {template_name}")
-        except Exception as e:
-             logger.error(f"[鸣潮] Template render failed: {e}")
-             raise e
-
-        try:
-            logger.debug("[鸣潮] 进入 async_playwright 上下文...")
-            async with async_playwright() as p:
-                logger.debug("[鸣潮] 启动浏览器...")
-                browser = await p.chromium.launch(args=["--no-sandbox", "--disable-setuid-sandbox"])
-                page = await browser.new_page(viewport={"width": 800, "height": 1000})
-                
-                logger.debug("[鸣潮] 加载HTML内容...")
-                await page.set_content(html_content)
-                
-                try:
-                    logger.debug("[鸣潮] 等待网络空闲...")
-                    await page.wait_for_load_state("networkidle", timeout=5000)
-                except Exception as e:
-                    logger.debug(f"[鸣潮] 等待网络空闲超时 (可能部分资源加载缓慢): {e}")
-
-                logger.debug("[鸣潮] 正在截图...")
-                # Screenshot only the container element to avoid extra whitespace
-                container = page.locator(".container")
-                screenshot = await container.screenshot(type='jpeg', quality=90)
-                
-                await browser.close()
-                logger.debug(f"[鸣潮] HTML渲染成功, 图片大小: {len(screenshot)} bytes")
-                return screenshot
-        except Exception as e:
-             logger.error(f"[鸣潮] Playwright execution failed: {e}")
-             raise e
-
-    except Exception as e:
-        logger.error(f"[鸣潮] HTML渲染失败: {e}")
-        return None
 
 
 async def ann_list_card() -> bytes:
@@ -142,12 +55,17 @@ async def ann_list_card() -> bytes:
             for item in grouped[t][:9]:
                 if not item.get("id") or not item.get("postTitle"):
                     continue
-                    
+
+                # 将封面图 URL 转换为 base64（使用本地缓存）
+                cover_url = item.get("coverUrl", "")
+                cover_b64 = await get_image_b64_with_cache(cover_url, ANN_CARD_PATH) if cover_url else ""
+
                 section_items.append({
                     "id": str(item.get("id", "")),
                     "postTitle": item.get("postTitle", ""),
                     "date_str": format_date(item.get("publishTime", 0)),
-                    "coverUrl": item.get("coverUrl", "")
+                    "coverUrl": cover_url,  # 保留原 URL 作为后备
+                    "coverB64": cover_b64,   # base64 版本
                 })
             
             if section_items:
@@ -167,7 +85,7 @@ async def ann_list_card() -> bytes:
         }
 
         logger.debug(f"[鸣潮] 准备通过HTML渲染列表, sections: {len(sections)}")
-        img_bytes = await render_html("ann_card.html", context)
+        img_bytes = await render_html(waves_templates, "ann_card.html", context)
         if img_bytes:
             return img_bytes
         else:
@@ -224,16 +142,23 @@ async def ann_detail_card(ann_id: int, is_check_time=False) -> Union[bytes, str,
                     "content": item.get("content", "")
                 })
             elif ctype == 2 and "url" in item:
+                # 将图片 URL 转换为 base64（使用本地缓存）
+                img_url = item["url"]
+                img_b64 = await get_image_b64_with_cache(img_url, ANN_CARD_PATH)
                 processed_content.append({
                     "contentType": 2,
-                    "url": item["url"]
+                    "url": img_url,        # 保留原 URL 作为后备
+                    "urlB64": img_b64,     # base64 版本
                 })
             else:
                 cover_url = item.get("coverUrl") or item.get("videoCoverUrl")
                 if cover_url:
-                     processed_content.append({
+                    # 将视频封面 URL 转换为 base64（使用本地缓存）
+                    cover_b64 = await get_image_b64_with_cache(cover_url, ANN_CARD_PATH)
+                    processed_content.append({
                         "contentType": "video",
-                        "coverUrl": cover_url
+                        "coverUrl": cover_url,    # 保留原 URL 作为后备
+                        "coverB64": cover_b64,     # base64 版本
                     })
 
         context = {
@@ -246,7 +171,7 @@ async def ann_detail_card(ann_id: int, is_check_time=False) -> Union[bytes, str,
         }
 
         logger.debug(f"[鸣潮] 准备通过HTML渲染详情, content items: {len(processed_content)}")
-        img_bytes = await render_html("ann_card.html", context)
+        img_bytes = await render_html(waves_templates, "ann_card.html", context)
         if img_bytes:
             return img_bytes
         else:
