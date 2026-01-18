@@ -165,7 +165,8 @@ async def save_card_info(
                     del old_data[piaobo_id]
 
         old = old_data.get(role_id)
-        if old != item:
+        cleaned_item = remove_urls_from_data(item)
+        if old != cleaned_item:
             refresh_update[role_id] = item
         else:
             refresh_unchanged[role_id] = item
