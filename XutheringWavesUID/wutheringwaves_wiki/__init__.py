@@ -33,7 +33,7 @@ async def send_waves_wiki(bot: Bot, ev: Event):
         char_name = wiki_name
         char_id = char_name_to_char_id(char_name)
         if not char_id:
-            msg = f"[鸣潮] wiki【{char_name}】无法找到, 可能暂未适配, 请先检查输入是否正确！\n"
+            msg = f"[鸣潮] 未找到指定角色, 请先检查输入是否正确！\n"
             return await bot.send(msg, at_sender)
 
         if wiki_type in ("技能", "天赋", "jn"):
@@ -47,7 +47,7 @@ async def send_waves_wiki(bot: Bot, ev: Event):
 
         img = await draw_char_wiki(char_id, query_role_type)
         if isinstance(img, str):
-            msg = f"[鸣潮] wiki【{wiki_name}】无法找到, 可能暂未适配, 请先检查输入是否正确！\n"
+            msg = f"[鸣潮] 未找到指定角色, 请先检查输入是否正确！\n"
             return await bot.send(msg, at_sender)
         await bot.send(img)
     else:
@@ -60,7 +60,7 @@ async def send_waves_wiki(bot: Bot, ev: Event):
             img = await draw_wiki_echo(echo_name)
 
         if isinstance(img, str) or not img:
-            msg = f"[鸣潮] wiki【{wiki_name}】无法找到, 可能暂未适配, 请先检查输入是否正确！\n"
+            msg = f"[鸣潮] wiki未找到指定内容, 请先检查输入是否正确！\n"
             return await bot.send(msg, at_sender)
 
         await bot.send(img)

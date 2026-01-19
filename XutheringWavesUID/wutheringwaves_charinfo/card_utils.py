@@ -78,7 +78,7 @@ def get_hash_id(name: str) -> str:
 
 def get_char_id_and_name(char: str) -> tuple[Optional[str], str, str]:
     char_id = None
-    msg = f"[鸣潮] 角色名【{char}】无法找到, 可能暂未适配, 请先检查输入是否正确！"
+    msg = f"[鸣潮] 角色名无法找到, 可能暂未适配, 请先检查输入是否正确！"
     sex = ""
     if "男" in char:
         char = char.replace("男", "")

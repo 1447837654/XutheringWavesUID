@@ -28,7 +28,7 @@ ann_minute_check: int = WutheringWavesConfig.get_config("AnnMinuteCheck").data
 @sv_ann.on_command("公告")
 async def ann_(bot: Bot, ev: Event):
     ann_id = ev.text
-    if not ann_id:
+    if not ann_id or ann_id.strip() == "列表":
         img = await ann_list_card()
         return await bot.send(img)
 

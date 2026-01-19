@@ -265,7 +265,7 @@ async def draw_all_rank_card(bot: Bot, ev: Event, char: str, rank_type: str, pag
 
         weapon_model = get_weapon_model(rank.weapon_id)
         if not weapon_model:
-            logger.warning(f"武器名【{rank.weapon_id}】无法找到, 可能暂未适配, 请先检查输入是否正确！")
+            logger.warning(f"武器无法找到, 可能暂未适配, 请先检查输入是否正确！")
             continue
 
         weapon_icon = await get_square_weapon(rank.weapon_id)
