@@ -135,14 +135,14 @@ async def new_draw_char_hold_rate(ev: Event, data, group_id: str = "") -> bytes:
     )
     declar = "本数据库从未公开样本总数和具体数据，请注意辨别"
     title_mask_draw.text(
-        (570, 560),
+        (610, 560),
         declar,
         (180, 180, 180),
         waves_font_20,
         "lm",
     )
     time_str = time.strftime("%Y-%m-%d", time.localtime())
-    title_mask_draw.text((1050, 560), time_str, "white", waves_font_20, "lm")
+    title_mask_draw.text((1090, 560), time_str, "white", waves_font_20, "lm")
 
     img.paste(title_bg, (0, 0), title_bg)
     img.paste(title_mask, (0, 0), title_mask)
