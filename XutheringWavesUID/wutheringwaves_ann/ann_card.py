@@ -1,8 +1,12 @@
 import time
+import warnings
 from typing import List, Union
 from datetime import datetime
 
 from PIL import Image, ImageOps, ImageDraw
+
+# 忽略PIL解压缩炸弹警告
+warnings.filterwarnings('ignore', category=Image.DecompressionBombWarning)
 
 from gsuid_core.logger import logger
 from gsuid_core.utils.image.convert import convert_img
