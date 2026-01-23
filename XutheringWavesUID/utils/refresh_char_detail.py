@@ -1,3 +1,4 @@
+import re
 import json
 import asyncio
 from typing import Dict, List, Union, Optional
@@ -54,6 +55,25 @@ class SemaphoreManager:
 
 
 semaphore_manager = SemaphoreManager()
+
+
+def remove_urls_from_data(data):
+    url_pattern = re.compile(r'https?://[^\s"\'<>]+')
+
+    if isinstance(data, dict):
+        result = {}
+        for key, value in data.items():
+            if key == "description":
+                result[key] = ""
+            else:
+                result[key] = remove_urls_from_data(value)
+        return result
+    elif isinstance(data, list):
+        return [remove_urls_from_data(item) for item in data]
+    elif isinstance(data, str):
+        return url_pattern.sub('', data)
+    else:
+        return data
 
 
 async def send_card(
@@ -145,7 +165,8 @@ async def save_card_info(
                     del old_data[piaobo_id]
 
         old = old_data.get(role_id)
-        if old != item:
+        cleaned_item = remove_urls_from_data(item)
+        if old != cleaned_item:
             refresh_update[role_id] = item
         else:
             refresh_unchanged[role_id] = item
@@ -157,8 +178,10 @@ async def save_card_info(
     await send_card(uid, user_id, save_data, is_self_ck, token, role_info, waves_data)
 
     try:
+        # 移除所有 URL 后再保存
+        cleaned_data = remove_urls_from_data(save_data)
         async with aiofiles.open(path, "w", encoding="utf-8") as file:
-            await file.write(json.dumps(save_data, ensure_ascii=False))
+            await file.write(json.dumps(cleaned_data, ensure_ascii=False))
     except Exception as e:
         logger.exception(f"save_card_info save failed {path}:", e)
 
@@ -188,6 +211,7 @@ async def save_char_list_cache(uid: str, waves_char_rank: Optional[List[WavesCha
             load_char_list_data,
             save_char_list_data,
         )
+        from ..utils.resource.constant import SPECIAL_CHAR_RANK_MAP
 
         # 加载现有的角色评分数据
         existing_char_list_data = await load_char_list_data(uid)
@@ -196,7 +220,14 @@ async def save_char_list_cache(uid: str, waves_char_rank: Optional[List[WavesCha
 
         # 只更新改动的角色
         for char_rank in waves_char_rank:
-            existing_char_list_data[str(char_rank.roleId)] = char_rank.score
+            role_id_str = str(char_rank.roleId)
+            mapped_id = SPECIAL_CHAR_RANK_MAP.get(role_id_str, role_id_str)
+            existing_char_list_data[mapped_id] = char_rank.score
+
+        larger_special_ids = [k for k, v in SPECIAL_CHAR_RANK_MAP.items() if k != v]
+        for large_id in larger_special_ids:
+            if large_id in existing_char_list_data:
+                del existing_char_list_data[large_id]
 
         # 保存更新后的数据
         if existing_char_list_data:

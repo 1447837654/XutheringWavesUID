@@ -94,7 +94,7 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
     "RankUseToken": GsBoolConfig(
         "有token才能进排行",
         "有token才能进排行",
-        False,
+        True,
     ),
     "GachaRankMin": GsIntConfig("抽卡排行最小抽数阈值", "抽卡排行中只显示总抽数达到此阈值的玩家", 1000),
     "DelInvalidCookie": GsBoolConfig(
@@ -109,15 +109,26 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
     ),
     "AnnMinuteCheck": GsIntConfig("公告推送时间检测（单位min）", "公告推送时间检测（单位min）", 10, 60),
     "RefreshInterval": GsIntConfig(
-        "刷新面板间隔，重启生效（单位秒）",
-        "刷新面板间隔，重启生效（单位秒）",
+        "刷新全部面板间隔，重启生效（单位秒）",
+        "刷新全部面板间隔，重启生效（单位秒）",
+        0,
+        600,
+    ),
+    "RefreshSingleCharInterval": GsIntConfig(
+        "刷新单角色面板间隔，重启生效（单位秒）",
+        "刷新单角色面板间隔，重启生效（单位秒）",
         0,
         600,
     ),
     "RefreshIntervalNotify": GsStrConfig(
-        "刷新面板间隔通知文案",
-        "刷新面板间隔通知文案",
+        "刷新全部面板间隔通知文案",
+        "刷新全部面板间隔通知文案",
         "请等待{}s后尝试刷新面板！",
+    ),
+    "RefreshSingleCharIntervalNotify": GsStrConfig(
+        "刷新单角色面板间隔通知文案",
+        "刷新单角色面板间隔通知文案",
+        "请等待{}s后尝试刷新角色面板！",
     ),
     "HideUid": GsBoolConfig(
         "隐藏uid",
@@ -202,9 +213,27 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
             "refresh_and_send_separately",
         ],
     ),
-    "HelpShowSign": GsBoolConfig(
-        "帮助是否显示签到帮助（重启生效）",
-        "需自行安装签到插件、使用相同前缀并关闭签到插件的帮助",
-        False,
+    "HelpExtraModules": GsListStrConfig(
+        "帮助显示额外模块（重启生效）",
+        "在帮助中额外显示的模块：roversign(签到)、todayecho(梭哈)、scoreecho(评分)、roverreminder(体力推送)，需自行安装对应插件",
+        [],
+        ["roversign", "todayecho", "scoreecho", "roverreminder", "all"],
+    ),
+    "ActiveUserDays": GsIntConfig(
+        "活跃账号认定天数",
+        "在此天数内有使用记录的账号被认定为活跃账号",
+        42,
+        10000,
+    ),
+    "CacheDaysToKeep": GsIntConfig(
+        "保留缓存公告、日历资源天数",
+        "自动删除创建时间早于此天数的公告和日历图片缓存，每次启动和每天定时执行",
+        42,
+        3650,
+    ),
+    "RankActiveFilterGroup": GsBoolConfig(
+        "群排行仅活跃用户",
+        "群排行（角色/练度/抽卡）是否仅统计活跃账号",
+        True,
     ),
 }

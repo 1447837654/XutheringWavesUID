@@ -194,7 +194,7 @@ async def get_one_rank(item: OneRankRequest) -> Optional[OneRankResponse]:
 
 
 def parse_text_and_number(text):
-    match = re.match(r"([^\d]+)(\d*)", text)
+    match = re.match(r"(.+?)伤害(\d*)", text)
 
     if match:
         text_part = match.group(1)  # 获取文字部分
@@ -441,7 +441,7 @@ async def get_role_need(
             elif is_online_user and not change_list_regex:
                 return (
                     None,
-                    f"[鸣潮] 未找到【{char_name}】角色信息, 请先使用[{PREFIX}刷新面板]进行刷新!",
+                    f"[鸣潮] 未找到【{char_name}】角色信息, 请先使用[{PREFIX}刷新{char_name}面板]进行刷新!",
                 )
             else:
                 # 未上线的角色，构造一个数据
@@ -449,7 +449,7 @@ async def get_role_need(
                 if not gen_role_detail:
                     return (
                         None,
-                        f"[鸣潮] 未找到【{char_name}】角色信息, 请先使用[{PREFIX}刷新面板]进行刷新!",
+                        f"[鸣潮] 未找到【{char_name}】角色信息!",
                     )
                 role_detail = gen_role_detail
 
@@ -585,7 +585,7 @@ async def draw_char_detail_img(
 
     char_id = char_name_to_char_id(char)
     if not char_id:
-        return f"[鸣潮] 角色名【{char}】无法找到, 可能暂未适配, 请先检查输入是否正确！\n"
+        return f"未找到指定角色, 请检查输入是否正确！"
 
     char_name = alias_to_char_name(char)
 
@@ -1016,7 +1016,7 @@ async def draw_char_score_img(ev: Event, uid: str, char: str, user_id: str, wave
 
     char_id = char_name_to_char_id(char)
     if not char_id:
-        return f"[鸣潮] 角色名【{char}】无法找到, 可能暂未适配, 请先检查输入是否正确！\n"
+        return f"未找到指定角色, 请检查输入是否正确！"
     char_name = alias_to_char_name(char)
 
     ck = ""

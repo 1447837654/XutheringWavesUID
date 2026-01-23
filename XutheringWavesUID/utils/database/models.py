@@ -5,18 +5,23 @@ from sqlalchemy import null, delete, update
 from sqlalchemy.sql import or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from gsuid_core.logger import logger
 from gsuid_core.webconsole.mount_app import PageSchema, GsAdminModel, site
 from gsuid_core.utils.database.startup import exec_list
 from gsuid_core.utils.database.base_models import (
     Bind,
-    Push,
     User,
+    BaseModel,
     with_session,
 )
+from gsuid_core.utils.database.models import Subscribe
+
+from .waves_subscribe import WavesSubscribe
+from .waves_user_activity import WavesUserActivity
 
 exec_list.extend(
     [
-        # 1. 添加新字段（如果不存在）
+        'ALTER TABLE WavesUserActivity ADD COLUMN bot_self_id TEXT DEFAULT ""',
         'ALTER TABLE WavesUser ADD COLUMN pgr_uid TEXT DEFAULT ""',
         'ALTER TABLE WavesUser ADD COLUMN record_id TEXT DEFAULT ""',
         'ALTER TABLE WavesUser ADD COLUMN platform TEXT DEFAULT ""',
@@ -27,19 +32,21 @@ exec_list.extend(
         "ALTER TABLE WavesUser ADD COLUMN game_id INTEGER DEFAULT 3 NOT NULL",
         'ALTER TABLE WavesUser ADD COLUMN is_login INTEGER DEFAULT 0 NOT NULL',
         'ALTER TABLE WavesBind ADD COLUMN pgr_uid TEXT DEFAULT ""',
-        # 2. 数据迁移：使用 pgr_uid 迁移旧数据到新结构
+        'ALTER TABLE WavesUser ADD COLUMN created_time INTEGER',
+        'ALTER TABLE WavesUser ADD COLUMN last_used_time INTEGER',
         "UPDATE WavesUser SET uid = COALESCE(NULLIF(uid, ''), pgr_uid) WHERE IFNULL(uid, '') = '' AND IFNULL(pgr_uid, '') != ''",
         "UPDATE WavesUser SET game_id = 2 WHERE IFNULL(pgr_uid, '') != ''",
         "UPDATE WavesUser SET game_id = CASE WHEN IFNULL(game_id, 0) = 0 THEN 3 ELSE game_id END WHERE IFNULL(pgr_uid, '') = ''",
         "UPDATE WavesUser SET game_id = 3 WHERE game_id IS NULL",
-        # 3. 清理：删除 WavesUser 中的废弃字段（WavesBind 保留 pgr_uid 用于绑定战双UID）
         "ALTER TABLE WavesUser DROP COLUMN pgr_sign_switch",
         "ALTER TABLE WavesUser DROP COLUMN pgr_uid",
+        "DELETE FROM WavesStaminaRecord WHERE id NOT IN (SELECT MAX(id) FROM WavesStaminaRecord GROUP BY user_id, bot_id, uid)",
     ]
 )
 
 T_WavesBind = TypeVar("T_WavesBind", bound="WavesBind")
 T_WavesUser = TypeVar("T_WavesUser", bound="WavesUser")
+T_WavesStaminaRecord = TypeVar("T_WavesStaminaRecord", bound="WavesStaminaRecord")
 
 
 class WavesBind(Bind, table=True):
@@ -53,6 +60,23 @@ class WavesBind(Bind, table=True):
         """根据传入`group_id`获取该群号下所有绑定`uid`列表"""
         result = await session.scalars(select(cls).where(col(cls.group_id).contains(group_id)))
         return result.all()
+
+    @classmethod
+    @with_session
+    async def get_binds_by_uid(
+        cls: Type[T_WavesBind],
+        session: AsyncSession,
+        uid: str,
+    ) -> List[T_WavesBind]:
+        """根据鸣潮UID或战双UID查找绑定记录（含包含匹配）"""
+        stmt = select(cls).where(
+            or_(
+                col(cls.uid).contains(uid),
+                col(cls.pgr_uid).contains(uid),
+            )
+        )
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
 
     @classmethod
     async def insert_waves_uid(
@@ -116,6 +140,28 @@ class WavesBind(Bind, table=True):
             )
         return res
 
+    @classmethod
+    async def delete_uid(
+        cls: Type[T_WavesBind],
+        user_id: str,
+        bot_id: str,
+        uid: str,
+        game_name: Optional[str] = None,
+    ) -> int:
+        """删除特征码并清理体力记录"""
+        res = await super().delete_uid(
+            user_id=user_id,
+            bot_id=bot_id,
+            uid=uid,
+            game_name=game_name,
+        )
+        if res == 0:
+            try:
+                await WavesStaminaRecord.delete_by_uid(user_id, bot_id, uid)
+            except Exception:
+                logger.exception("[鸣潮] 删除特征码时清理体力记录失败")
+        return res
+
 
 class WavesUser(User, table=True):
     __table_args__: Dict[str, Any] = {"extend_existing": True}
@@ -129,6 +175,8 @@ class WavesUser(User, table=True):
     did: str = Field(default="", title="did")
     game_id: int = Field(default=3, title="GameID", nullable=False, sa_column_kwargs={"server_default": "3"})
     is_login: bool = Field(default=False, title="是否waves登录")
+    created_time: Optional[int] = Field(default=None, title="创建时间")
+    last_used_time: Optional[int] = Field(default=None, title="最后使用时间")
 
     @classmethod
     @with_session
@@ -278,14 +326,36 @@ class WavesUser(User, table=True):
         bot_id: str,
         game_id: Optional[int] = None,
     ):
-        conditions = [
+        # 先查询该用户的这个uid记录，检查is_login状态
+        query_conditions = [
             col(cls.user_id) == user_id,
             col(cls.uid) == uid,
             col(cls.bot_id) == bot_id,
         ]
         if game_id is not None:
-            conditions.append(col(cls.game_id) == game_id)
-        sql = delete(cls).where(and_(*conditions))
+            query_conditions.append(col(cls.game_id) == game_id)
+
+        query_sql = select(cls).where(and_(*query_conditions))
+        query_result = await session.execute(query_sql)
+        user_record = query_result.scalars().first()
+
+        # 如果该记录存在且is_login为True，删除所有相同uid的记录
+        if user_record and user_record.is_login:
+            conditions = [col(cls.uid) == uid]
+            if game_id is not None:
+                conditions.append(col(cls.game_id) == game_id)
+            sql = delete(cls).where(and_(*conditions))
+        else:
+            # 否则只删除当前用户的记录
+            conditions = [
+                col(cls.user_id) == user_id,
+                col(cls.uid) == uid,
+                col(cls.bot_id) == bot_id,
+            ]
+            if game_id is not None:
+                conditions.append(col(cls.game_id) == game_id)
+            sql = delete(cls).where(and_(*conditions))
+
         result = await session.execute(sql)
         return result.rowcount
 
@@ -299,7 +369,15 @@ class WavesUser(User, table=True):
         new_token: str,
         new_did: str,
     ):
-        """根据uid和game_id查找WavesUser，如果is_login为True则更新cookie和did"""
+        """根据uid和game_id查找WavesUser，如果is_login为True且在活跃天数内则更新cookie和did"""
+        import time
+
+        # 获取活跃天数配置
+        from ...wutheringwaves_config import WutheringWavesConfig
+        active_days = WutheringWavesConfig.get_config("ActiveUserDays").data
+        current_time = int(time.time())
+        threshold_time = current_time - (active_days * 24 * 60 * 60)
+
         sql = (
             update(cls)
             .where(
@@ -307,6 +385,8 @@ class WavesUser(User, table=True):
                     col(cls.uid) == uid,
                     col(cls.game_id) == game_id,
                     col(cls.is_login) == True,
+                    col(cls.last_used_time) != null(),
+                    col(cls.last_used_time) >= threshold_time,
                 )
             )
             .values(cookie=new_token, did=new_did)
@@ -314,18 +394,231 @@ class WavesUser(User, table=True):
         result = await session.execute(sql)
         return result.rowcount
 
+    @classmethod
+    @with_session
+    async def update_last_used_time(
+        cls,
+        session: AsyncSession,
+        uid: str,
+        user_id: str,
+        bot_id: str,
+        game_id: Optional[int] = None,
+    ):
+        """更新最后使用时间，如果创建时间为空则同时设置创建时间
 
-class WavesPush(Push, table=True):
+        会更新所有具有相同 uid 和 cookie 的记录
+        """
+        import time
+
+        current_time = int(time.time())
+
+        # 先查询当前用户获取 cookie
+        filters = [
+            cls.user_id == user_id,
+            cls.uid == uid,
+            cls.bot_id == bot_id,
+        ]
+        if game_id is not None:
+            filters.append(cls.game_id == game_id)
+
+        result = await session.execute(select(cls).where(*filters))
+        user = result.scalars().first()
+
+        if user and user.cookie:
+            # 更新所有具有相同 user_id 和 cookie 的记录
+            all_users_result = await session.execute(
+                select(cls).where(
+                    and_(
+                        col(cls.user_id) == user_id,
+                        col(cls.cookie) == user.cookie,
+                    )
+                )
+            )
+            all_users = all_users_result.scalars().all()
+
+            # 批量更新
+            for u in all_users:
+                u.last_used_time = current_time
+                if u.created_time is None:
+                    u.created_time = current_time
+
+            return True
+        return False
+
+    @classmethod
+    @with_session
+    async def get_active_user_count(
+        cls: Type[T_WavesUser],
+        session: AsyncSession,
+        active_days: int,
+    ) -> int:
+        """获取活跃用户数量
+
+        Args:
+            active_days: 活跃认定天数
+
+        Returns:
+            活跃用户数量
+        """
+        import time
+
+        current_time = int(time.time())
+        threshold_time = current_time - (active_days * 24 * 60 * 60)
+
+        sql = select(cls).where(
+            and_(
+                or_(col(cls.status) == null(), col(cls.status) == ""),
+                col(cls.cookie) != null(),
+                col(cls.cookie) != "",
+                col(cls.last_used_time) != null(),
+                col(cls.last_used_time) >= threshold_time,
+            )
+        )
+
+        result = await session.execute(sql)
+        data = result.scalars().all()
+        return len(data)
+
+
+class WavesStaminaRecord(BaseModel, table=True):
+    """体力查询记录表"""
+
+    __tablename__ = "WavesStaminaRecord"
     __table_args__: Dict[str, Any] = {"extend_existing": True}
-    bot_id: str = Field(title="平台")
-    uid: str = Field(default=None, title="鸣潮UID")
-    resin_push: Optional[str] = Field(
-        title="体力推送",
-        default="off",
-        schema_extra={"json_schema_extra": {"hint": "ww开启体力推送"}},
-    )
-    resin_value: Optional[int] = Field(title="体力阈值", default=180)
-    resin_is_push: Optional[str] = Field(title="体力是否已推送", default="off")
+
+    uid: str = Field(default="", title="鸣潮UID")
+    bot_self_id: str = Field(default="", title="BotSelfID")
+    mr_query_time: Optional[int] = Field(default=None, title="体力查询时间")
+    mr_value: Optional[int] = Field(default=None, title="结晶波片值")
+    user_email: str = Field(default="", title="用户邮箱")
+    email_last_try_time: Optional[int] = Field(default=None, title="邮件上次尝试发送时间")
+    email_send_success: Optional[bool] = Field(default=None, title="邮箱发送成功")
+    email_last_success_time: Optional[int] = Field(default=None, title="邮件上次发送成功时间")
+    email_fail_count: int = Field(default=0, title="连续发送失败次数")
+    stamina_push_switch: str = Field(default="off", title="体力推送开关")
+    stamina_threshold: Optional[int] = Field(default=None, title="体力阈值")
+    is_ck_valid: Optional[bool] = Field(default=None, title="CK是否有效")
+
+    @classmethod
+    @with_session
+    async def upsert_stamina_query(
+        cls: Type[T_WavesStaminaRecord],
+        session: AsyncSession,
+        user_id: str,
+        bot_id: str,
+        bot_self_id: str,
+        uid: str,
+        mr_query_time: int,
+        mr_value: Optional[int],
+        is_ck_valid: Optional[bool],
+    ) -> bool:
+        """更新或创建体力查询记录，仅更新查询时间/MR值/CK有效状态"""
+        sql = select(cls).where(
+            and_(
+                cls.user_id == user_id,
+                cls.bot_id == bot_id,
+                cls.uid == uid,
+            )
+        )
+        result = await session.execute(sql)
+        record = result.scalars().first()
+
+        if record:
+            record.bot_self_id = bot_self_id
+            record.mr_query_time = mr_query_time
+            record.mr_value = mr_value
+            record.is_ck_valid = is_ck_valid
+            session.add(record)
+            return True
+
+        new_record = cls(
+            user_id=user_id,
+            bot_id=bot_id,
+            bot_self_id=bot_self_id,
+            uid=uid,
+            mr_query_time=mr_query_time,
+            mr_value=mr_value,
+            is_ck_valid=is_ck_valid,
+        )
+        session.add(new_record)
+        return True
+
+    @classmethod
+    @with_session
+    async def update_ck_valid(
+        cls: Type[T_WavesStaminaRecord],
+        session: AsyncSession,
+        user_id: str,
+        bot_id: str,
+        bot_self_id: str,
+        uid: str,
+        is_ck_valid: bool,
+    ) -> bool:
+        """更新或创建体力记录的 CK 有效状态"""
+        sql = select(cls).where(
+            and_(
+                cls.user_id == user_id,
+                cls.bot_id == bot_id,
+                cls.uid == uid,
+            )
+        )
+        result = await session.execute(sql)
+        record = result.scalars().first()
+
+        if record:
+            record.bot_self_id = bot_self_id
+            record.is_ck_valid = is_ck_valid
+            session.add(record)
+            return True
+
+        session.add(
+            cls(
+                user_id=user_id,
+                bot_id=bot_id,
+                bot_self_id=bot_self_id,
+                uid=uid,
+                is_ck_valid=is_ck_valid,
+            )
+        )
+        return True
+
+    @classmethod
+    @with_session
+    async def delete_by_uid(
+        cls: Type[T_WavesStaminaRecord],
+        session: AsyncSession,
+        user_id: str,
+        bot_id: str,
+        uid: str,
+    ) -> int:
+        """删除指定用户/平台/UID的体力记录"""
+        sql = delete(cls).where(
+            and_(
+                cls.user_id == user_id,
+                cls.bot_id == bot_id,
+                cls.uid == uid,
+            )
+        )
+        result = await session.execute(sql)
+        return result.rowcount
+
+    @classmethod
+    @with_session
+    async def delete_by_user(
+        cls: Type[T_WavesStaminaRecord],
+        session: AsyncSession,
+        user_id: str,
+        bot_id: str,
+    ) -> int:
+        """删除指定用户/平台的全部体力记录"""
+        sql = delete(cls).where(
+            and_(
+                cls.user_id == user_id,
+                cls.bot_id == bot_id,
+            )
+        )
+        result = await session.execute(sql)
+        return result.rowcount
 
 
 @site.register_admin
@@ -353,9 +646,36 @@ class WavesUserAdmin(GsAdminModel):
 
 
 @site.register_admin
-class WavesPushAdmin(GsAdminModel):
-    pk_name = "id"
-    page_schema = PageSchema(label="鸣潮推送管理", icon="fa fa-bullhorn")  # type: ignore
+class WavesSubscribeAdmin(GsAdminModel):
+    pk_name = "group_id"
+    page_schema = PageSchema(
+        label="鸣潮发送-群组绑定",
+        icon="fa fa-link",
+    )  # type: ignore
 
     # 配置管理模型
-    model = WavesPush
+    model = WavesSubscribe
+
+
+@site.register_admin
+class WavesUserActivityAdmin(GsAdminModel):
+    pk_name = "id"
+    page_schema = PageSchema(
+        label="鸣潮用户活跃度",
+        icon="fa fa-clock-o",
+    )  # type: ignore
+
+    # 配置管理模型
+    model = WavesUserActivity
+
+
+@site.register_admin
+class WavesStaminaRecordAdmin(GsAdminModel):
+    pk_name = "id"
+    page_schema = PageSchema(
+        label="鸣潮体力推送",
+        icon="fa fa-battery-full",
+    )  # type: ignore
+
+    # 配置管理模型
+    model = WavesStaminaRecord

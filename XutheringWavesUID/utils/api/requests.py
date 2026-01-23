@@ -192,11 +192,15 @@ class WavesApi:
         if not data.success:
             if data.is_bat_token_invalid:
                 if waves_user := await self.refresh_bat_token(waves_user):
+                    # 更新最后使用时间
+                    await WavesUser.update_last_used_time(uid, user_id, bot_id, game_id=WAVES_GAME_ID)
                     return waves_user.cookie
             else:
                 await data.mark_cookie_invalid(uid, waves_user.cookie)
             return ""
 
+        # 更新最后使用时间
+        await WavesUser.update_last_used_time(uid, user_id, bot_id, game_id=WAVES_GAME_ID)
         return waves_user.cookie
 
     async def get_waves_random_cookie(self, uid: str, user_id: str) -> Optional[str]:
@@ -795,6 +799,8 @@ class WavesApi:
         res = await self._waves_request(ANN_CONTENT_URL, "POST", headers, data=data)
         if res.success:
             raw_data = res.model_dump()
+            if "headCodeUrl" in raw_data["data"]:
+                raw_data["data"]["postDetail"]["headCodeUrl"] = raw_data["data"]["headCodeUrl"]
             self.ann_map[post_id] = raw_data["data"]["postDetail"]
             return raw_data["data"]["postDetail"]
         return {}
@@ -806,7 +812,7 @@ class WavesApi:
 
         self.ann_list_data = []
         for _event in self.event_type.keys():
-            res = await self.get_ann_list_by_type(eventType=_event, pageSize=5)
+            res = await self.get_ann_list_by_type(eventType=_event, pageSize=9)
             if res.success:
                 raw_data = res.model_dump()
                 value = [{**x, "id": int(x["id"])} for x in raw_data["data"]["list"]]
@@ -814,11 +820,19 @@ class WavesApi:
 
         bbs_sub = WutheringWavesConfig.get_config("WavesAnnBBSSub").data
         for bbs_id in bbs_sub:
-            res = await self.get_bbs_list(bbs_id, pageIndex=1, pageSize=5)
+            res = await self.get_bbs_list(bbs_id, pageIndex=1, pageSize=9)
             if not res.success:
                 continue
             raw_data = res.model_dump()
             value = [{**x, "id": int(x["postId"])} for x in raw_data["data"]["postList"]]
+            self.ann_list_data.extend(value)
+
+        res = await self.get_bbs_list("10011001", pageIndex=1, pageSize=9)
+        if res.success:
+            raw_data = res.model_dump()
+            post_list = raw_data["data"]["postList"]
+            post_list.sort(key=lambda x: x.get("showTime", 0), reverse=True)
+            value = [{**x, "id": int(x["postId"]), "eventType": 4} for x in post_list]
             self.ann_list_data.extend(value)
 
         return self.ann_list_data

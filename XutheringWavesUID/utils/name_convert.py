@@ -171,6 +171,12 @@ def alias_to_char_name(char_name: str) -> str:
     return char_name
 
 
+def is_valid_char_name(char_name: str) -> bool:
+    ensure_data_loaded()
+    all_names = set(char_alias_data.keys()) | {alias for aliases in char_alias_data.values() for alias in aliases}
+    return char_name in sorted(all_names, key=len, reverse=True)
+
+
 def alias_to_char_name_optional(char_name: Optional[str]) -> Optional[str]:
     ensure_data_loaded()
     if not char_name:
@@ -209,7 +215,9 @@ def char_name_to_char_id(char_name: str) -> Optional[str]:
     char_name = alias_to_char_name(char_name)
     for id, name in id2name.items():
         if char_name == name:
-            return id
+            from .resource.constant import SPECIAL_CHAR_RANK_MAP
+            mapped_id = SPECIAL_CHAR_RANK_MAP.get(id, id)
+            return mapped_id
     else:
         return None
 
