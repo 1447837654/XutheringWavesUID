@@ -304,7 +304,7 @@ async def get_attribute_effect(name: str = "") -> Image.Image:
     if (TEXT_PATH / "attribute_effect" / f"attr_{name}.png").exists():
         return Image.open(TEXT_PATH / "attribute_effect" / f"attr_{name}.png").convert("RGBA")
     else:
-        return Image.open(TEXT_PATH / "attribute_effect" / "attr_不绝余音.png").convert("RGBA")
+        return Image.open(TEXT_PATH / "attribute_effect" / "attr.png").convert("RGBA")
 
 
 async def get_weapon_type(name: str = "") -> Image.Image:  # 出新武器改这里
