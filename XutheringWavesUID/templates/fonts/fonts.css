@@ -35,7 +35,7 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('/waves/fonts/SourceHanSansCN-Regular.ttc') format('truetype-collection');
+  src: url('/waves/fonts/SourceHanSansCN-Regular.ttc') format('truetype');
 }
 
 @font-face {
@@ -43,5 +43,5 @@
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url('/waves/fonts/SourceHanSansCN-Bold.ttc') format('truetype-collection');
+  src: url('/waves/fonts/SourceHanSansCN-Bold.ttc') format('truetype');
 }
