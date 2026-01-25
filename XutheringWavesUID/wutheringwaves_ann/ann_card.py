@@ -101,7 +101,7 @@ async def ann_list_card(user_id: str = None) -> bytes:
                 if not cover_url and user_info:
                     cover_url = user_info.get("headCodeUrl", "")
 
-                cover_b64 = await get_image_b64_with_cache(cover_url, ANN_CARD_PATH) if cover_url else ""
+                cover_b64 = await get_image_b64_with_cache(cover_url, ANN_CARD_PATH, quality=50) if cover_url else ""
 
                 post_id = item.get("postId", "") or str(item.get("id", ""))
                 from .utils.post_id_mapper import get_or_create_short_id
@@ -143,7 +143,7 @@ async def ann_list_card(user_id: str = None) -> bytes:
             user_ip_region = user_info.get("ipRegion", "")
             head_url = user_info.get("headCodeUrl", "")
             if head_url:
-                user_avatar_b64 = await get_image_b64_with_cache(head_url, ANN_CARD_PATH)
+                user_avatar_b64 = await get_image_b64_with_cache(head_url, ANN_CARD_PATH, quality=70)
 
         is_user_list = bool(user_id) and user_id != "10011001"
 
@@ -252,7 +252,7 @@ async def ann_detail_card(ann_id: Union[int, str], is_check_time=False) -> Union
                 })
             elif ctype == 2 and "url" in item:
                 img_url = item["url"]
-                img_b64 = await get_image_b64_with_cache(img_url, ANN_CARD_PATH)
+                img_b64 = await get_image_b64_with_cache(img_url, ANN_CARD_PATH, quality=80)
                 processed_content.append({
                     "contentType": 2,
                     "url": img_url,
@@ -261,7 +261,7 @@ async def ann_detail_card(ann_id: Union[int, str], is_check_time=False) -> Union
             else:
                 cover_url = item.get("coverUrl") or item.get("videoCoverUrl")
                 if cover_url:
-                    cover_b64 = await get_image_b64_with_cache(cover_url, ANN_CARD_PATH)
+                    cover_b64 = await get_image_b64_with_cache(cover_url, ANN_CARD_PATH, quality=75)
                     processed_content.append({
                         "contentType": "video",
                         "coverUrl": cover_url,
@@ -272,7 +272,7 @@ async def ann_detail_card(ann_id: Union[int, str], is_check_time=False) -> Union
         head_code_url = res.get("headCodeUrl", "")
         user_avatar = ""
         if head_code_url:
-            user_avatar = await get_image_b64_with_cache(head_code_url, ANN_CARD_PATH)
+            user_avatar = await get_image_b64_with_cache(head_code_url, ANN_CARD_PATH, quality=70)
 
         context = {
             "title": res.get("postTitle", "公告详情"),

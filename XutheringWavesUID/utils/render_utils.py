@@ -330,19 +330,46 @@ def get_footer_b64(footer_type: str = "black") -> Optional[str]:
         return None
 
 
-async def get_image_b64_with_cache(url: str, cache_path: Path) -> str:
+async def get_image_b64_with_cache(url: str, cache_path: Path, quality: int = 75) -> str:
     if not url:
         return ""
 
     try:
         from .image import pic_download_from_url
+        from PIL import Image
+        from io import BytesIO
 
         await pic_download_from_url(cache_path, url)
 
         filename = url.split("/")[-1]
         local_path = cache_path / filename
 
-        return image_to_base64(local_path)
+        img = Image.open(local_path)
+
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            if img.mode in ('RGBA', 'LA'):
+                background.paste(img, mask=img.split()[-1])
+                img = background
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        buffer = BytesIO()
+        img.save(buffer, 'JPEG', quality=quality, optimize=True)
+        buffer.seek(0)
+
+        data = buffer.read()
+        b64_str = f"data:image/jpeg;base64,{base64.b64encode(data).decode('utf-8')}"
+
+        orig_size = local_path.stat().st_size
+        compressed_size = len(data)
+        compression_ratio = (1 - compressed_size / orig_size) * 100 if orig_size > 0 else 0
+        logger.debug(f"[渲染工具] 图片压缩: {filename}, 原始: {orig_size} bytes, 压缩后: {compressed_size} bytes, 压缩率: {compression_ratio:.2f}%")
+
+        return b64_str
+
     except Exception as e:
         logger.warning(f"[渲染工具] 获取图片 base64 失败: {url}, {e}")
         return ""
