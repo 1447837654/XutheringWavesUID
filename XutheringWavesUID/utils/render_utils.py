@@ -136,7 +136,7 @@ async def _render_via_remote(html_content: str, remote_url: str) -> Optional[byt
     try:
         logger.debug(f"[鸣潮] 尝试使用外置渲染服务: {remote_url}")
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
                 remote_url,
                 json={"html": html_content},
@@ -228,12 +228,6 @@ async def render_html(waves_templates, template_name: str, context: dict) -> Opt
                 page = await context_obj.new_page()
                 logger.debug("[鸣潮] 加载HTML内容...")
                 await page.set_content(html_content)
-
-                try:
-                    logger.debug("[鸣潮] 等待网络空闲...")
-                    await page.wait_for_load_state("networkidle", timeout=5000)
-                except Exception as e:
-                    logger.debug(f"[鸣潮] 等待网络空闲超时 (可能部分资源加载缓慢): {e}")
 
                 logger.debug("[鸣潮] 正在计算容器尺寸...")
                 container = page.locator(".container")
