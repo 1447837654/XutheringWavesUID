@@ -236,6 +236,11 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
         "群排行（角色/练度/抽卡）是否仅统计活跃账号",
         True,
     ),
+    "UseHtmlRender": GsBoolConfig(
+        "使用HTML渲染",
+        "开启后将使用HTML渲染公告卡片，关闭后将回退到PIL或纯文本",
+        True,
+    ),
     "RemoteRenderEnable": GsBoolConfig(
         "外置渲染开关",
         "开启后将使用外置渲染服务进行HTML渲染，失败时自动回退到本地渲染",

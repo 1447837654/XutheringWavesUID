@@ -4,7 +4,7 @@ from datetime import datetime
 
 from gsuid_core.logger import logger
 from ..utils.waves_api import waves_api
-from ..wutheringwaves_config import PREFIX
+from ..wutheringwaves_config import PREFIX, WutheringWavesConfig
 from ..utils.resource.RESOURCE_PATH import waves_templates, ANN_CARD_PATH
 from ..utils.render_utils import (
     PLAYWRIGHT_AVAILABLE,
@@ -21,7 +21,8 @@ from .ann_card import format_date
 
 
 async def ann_list_card(user_id: str = None) -> bytes:
-    if not PLAYWRIGHT_AVAILABLE:
+    use_html_render = WutheringWavesConfig.get_config("UseHtmlRender").data
+    if not PLAYWRIGHT_AVAILABLE or not use_html_render:
         return await ann_list_card_pil()
 
     try:

@@ -7,6 +7,7 @@ from io import BytesIO
 
 from PIL import Image
 
+from ..wutheringwaves_config import WutheringWavesConfig
 from ..utils.resource.RESOURCE_PATH import (
     MAP_CHALLENGE_PATH,
     waves_templates,
@@ -111,7 +112,8 @@ async def _process_floor_data(floor_data: Dict[str, Any]) -> Dict[str, Any]:
 
 async def draw_tower_wiki_render(period: Optional[int] = None) -> Optional[bytes]:
     """渲染深塔信息 (HTML)"""
-    if not PLAYWRIGHT_AVAILABLE or render_html is None:
+    use_html_render = WutheringWavesConfig.get_config("UseHtmlRender").data
+    if not PLAYWRIGHT_AVAILABLE or render_html is None or not use_html_render:
         return None
 
     if period is None:
@@ -201,7 +203,8 @@ async def draw_tower_wiki_render(period: Optional[int] = None) -> Optional[bytes
 
 async def draw_slash_wiki_render(period: Optional[int] = None) -> Optional[bytes]:
     """渲染海墟信息 (HTML)"""
-    if not PLAYWRIGHT_AVAILABLE or render_html is None:
+    use_html_render = WutheringWavesConfig.get_config("UseHtmlRender").data
+    if not PLAYWRIGHT_AVAILABLE or render_html is None or not use_html_render:
         return None
 
     if period is None:
