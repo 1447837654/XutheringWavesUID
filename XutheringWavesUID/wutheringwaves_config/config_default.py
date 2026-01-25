@@ -236,4 +236,14 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
         "群排行（角色/练度/抽卡）是否仅统计活跃账号",
         True,
     ),
+    "RemoteRenderEnable": GsBoolConfig(
+        "外置渲染开关",
+        "开启后将使用外置渲染服务进行HTML渲染，失败时自动回退到本地渲染",
+        False,
+    ),
+    "RemoteRenderUrl": GsStrConfig(
+        "外置渲染地址",
+        "外置渲染服务的API地址，例如：http://127.0.0.1:3000/render",
+        "http://127.0.0.1:3000/render",
+    ),
 }
