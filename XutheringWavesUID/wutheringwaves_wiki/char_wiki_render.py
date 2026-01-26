@@ -147,7 +147,7 @@ async def draw_char_skill_render(char_id: str):
     context["section"] = "skill"
     context["skills"] = await prepare_char_skill_data(char_model.skillTree)
     
-    res = await render_html(waves_templates, "char_wiki.html", context)
+    res = await render_html(waves_templates, "wiki/char_wiki.html", context)
     if res:
         save_wiki_cache(char_id, "skill", res)
     return res
@@ -169,7 +169,7 @@ async def draw_char_chain_render(char_id: str):
     context["section"] = "chain"
     context["chains"] = await prepare_char_chain_data(char_model.chains)
 
-    res = await render_html(waves_templates, "char_wiki.html", context)
+    res = await render_html(waves_templates, "wiki/char_wiki.html", context)
     if res:
         save_wiki_cache(char_id, "chain", res)
     return res
@@ -198,7 +198,7 @@ async def draw_char_forte_render(char_id: str):
     context["section"] = "forte"
     context["forte"] = await prepare_char_forte_data_render(data, str(char_id))
 
-    res = await render_html(waves_templates, "char_wiki.html", context)
+    res = await render_html(waves_templates, "wiki/char_wiki.html", context)
     if res:
         save_wiki_cache(char_id, "forte", res)
     return res

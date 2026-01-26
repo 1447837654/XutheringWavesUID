@@ -198,7 +198,7 @@ async def draw_tower_wiki_render(period: Optional[int] = None) -> Optional[bytes
         "footer_url": image_to_base64(TEXTURE2D_PATH / "footer_hakush.png")
     }
 
-    return await render_html(waves_templates, "challenge_card.html", context)
+    return await render_html(waves_templates, "wiki/challenge_card.html", context)
 
 
 async def draw_slash_wiki_render(period: Optional[int] = None) -> Optional[bytes]:
@@ -314,4 +314,4 @@ async def draw_slash_wiki_render(period: Optional[int] = None) -> Optional[bytes
         "footer_url": image_to_base64(TEXTURE2D_PATH / "footer_hakush.png")
     }
 
-    return await render_html(waves_templates, "challenge_card.html", context)
+    return await render_html(waves_templates, "wiki/challenge_card.html", context)

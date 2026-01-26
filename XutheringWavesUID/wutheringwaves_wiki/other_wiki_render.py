@@ -50,7 +50,7 @@ async def draw_weapon_wiki_render(weapon_name: str) -> Optional[bytes]:
         return None
 
     context = await _prepare_weapon_context(weapon_id, weapon_model)
-    return await render_html(waves_templates, "item_wiki.html", context)
+    return await render_html(waves_templates, "wiki/item_wiki.html", context)
 
 
 async def _prepare_weapon_context(weapon_id: str, weapon_model: WeaponModel) -> Dict[str, Any]:
@@ -117,7 +117,7 @@ async def draw_echo_wiki_render(echo_name: str) -> Optional[bytes]:
         return None
 
     context = await _prepare_echo_context(echo_id, echo_model)
-    return await render_html(waves_templates, "item_wiki.html", context)
+    return await render_html(waves_templates, "wiki/item_wiki.html", context)
 
 
 async def _prepare_echo_context(echo_id: str, echo_model: EchoModel) -> Dict[str, Any]:
@@ -227,7 +227,7 @@ async def draw_weapon_list_render(weapon_type: str = "") -> Optional[bytes]:
         "footer_url": image_to_base64(TEXTURE2D_PATH / "footer_hakush.png"),
     }
 
-    return await render_html(waves_templates, "list_wiki.html", context)
+    return await render_html(waves_templates, "wiki/list_wiki.html", context)
 
 
 async def draw_sonata_list_render(version: str = "") -> Optional[bytes]:
@@ -304,4 +304,4 @@ async def draw_sonata_list_render(version: str = "") -> Optional[bytes]:
         "footer_url": image_to_base64(TEXTURE2D_PATH / "footer_hakush.png"),
     }
 
-    return await render_html(waves_templates, "list_wiki.html", context)
+    return await render_html(waves_templates, "wiki/list_wiki.html", context)

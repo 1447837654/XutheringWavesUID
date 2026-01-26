@@ -4,7 +4,6 @@ from typing import Dict, List, Union
 from gsuid_core.bot import msgjson
 from gsuid_core.logger import logger
 
-from ..wutheringwaves_config import WutheringWavesConfig
 from ..utils.name_convert import (
     alias_to_char_name_list,
     alias_to_char_name_optional,

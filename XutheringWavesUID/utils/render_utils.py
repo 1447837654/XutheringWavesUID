@@ -180,7 +180,6 @@ async def render_html(waves_templates, template_name: str, context: dict) -> Opt
                 context["font_css_url"] = font_css_url
                 html_content = template.render(**context)
                 logger.debug(f"[鸣潮] 使用在线字体渲染 HTML: {template_name}")
-
                 logger.debug(f"[鸣潮] 外置渲染已启用，尝试使用: {remote_url}")
                 remote_result = await _render_via_remote(html_content, remote_url)
                 if remote_result is not None:

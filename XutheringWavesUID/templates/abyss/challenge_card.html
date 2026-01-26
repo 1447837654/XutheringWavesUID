@@ -3,9 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>鸣潮角色卡片</title>
+    <title>鸣潮全息战略</title>
     <style>
         @import url('{{ font_css_url }}');
+
+        * {
+            box-sizing: border-box;
+        }
 
         body {
             margin: 0;
@@ -37,8 +41,9 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.1);
+            background-color: rgba(0, 0, 0, 0.2);
             z-index: 1;
+            backdrop-filter: saturate(1.2);
         }
 
         .bg-image {
@@ -52,19 +57,18 @@
             position: relative;
             z-index: 1;
             width: 100%;
-            padding: 30px;
-            box-sizing: border-box;
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            gap: 24px;
-            filter: brightness(1.05);
+            gap: 35px;
         }
 
+        /* --- User Card --- */
         .user-card {
             background:
                 radial-gradient(circle at 100% 0%, rgba(212, 177, 99, 0.15) 0%, transparent 40%),
                 linear-gradient(180deg, rgba(30, 34, 42, 0.9) 0%, rgba(15, 17, 21, 0.95) 100%);
-            border-radius: 0 0 16px 16px;
+            border-radius: 16px;
             padding: 25px 40px;
             display: flex;
             align-items: center;
@@ -212,31 +216,33 @@
             margin-top: 2px;
         }
 
+        /* --- Challenge Card Section --- */
         .section-container {
             background-color: rgba(20, 22, 26, 0.6);
-            backdrop-filter: blur(4px);
-            border-radius: 12px;
+            backdrop-filter: blur(8px);
+            border-radius: 16px;
             border: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 20px 25px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            padding: 25px 30px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
         }
 
         .section-header {
             display: flex;
             align-items: center;
-            margin-bottom: 16px;
+            margin-bottom: 25px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            padding-bottom: 10px;
+            padding-bottom: 15px;
         }
         
         .section-title {
-            font-size: 28px;
+            font-size: 30px;
             font-weight: 800;
             color: #fff;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-right: 15px;
+            letter-spacing: 1.5px;
+            margin-right: 20px;
             text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            font-style: italic;
         }
         
         .section-deco-line {
@@ -246,202 +252,237 @@
             box-shadow: 0 0 5px rgba(212, 177, 99, 0.3);
         }
 
-        .base-info-grid {
+        .challenge-grid {
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            padding-bottom: 10px;
+        }
+
+        .challenge-item {
+            background: linear-gradient(145deg, rgba(35, 40, 48, 0.7), rgba(25, 28, 34, 0.8));
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+            transition: all 0.3s ease;
+        }
+
+        .challenge-item:hover {
+            transform: translateY(-4px);
+            border-color: rgba(212, 177, 99, 0.4);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+
+        .challenge-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center; 
+            padding: 10px 18px; 
+            background: linear-gradient(90deg, rgba(0,0,0,0.3) 0%, transparent 100%);
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            min-height: 50px;
+        }
+
+        .boss-name-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .boss-name {
+            font-size: 24px;
+            font-weight: 800;
+            color: #f0f0f0;
+            text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            line-height: 1.1;
+        }
+        
+        .boss-level {
+            font-family: 'Oswald', sans-serif;
+            font-size: 14px;
+            color: #d4b163;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            opacity: 0.8;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center; 
             gap: 15px;
         }
 
-        .info-item {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 10px;
-            padding: 15px 10px;
-            text-align: center;
+        .difficulty-badge {
+            font-family: 'Oswald', sans-serif;
+            font-size: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #aaa;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: bold;
+        }
+
+        .time-display {
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-        }
-
-        .info-item.highlight {
-            background: rgba(212, 177, 99, 0.12);
-            border-color: rgba(212, 177, 99, 0.3);
-            box-shadow: inset 0 0 15px rgba(212, 177, 99, 0.05);
-        }
-
-        .info-key {
-            font-size: 22px;
-            color: #aaa;
-            margin-bottom: 8px;
-            font-weight: 700;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-        }
-
-        .info-value {
-            font-family: 'Oswald', sans-serif;
-            font-size: 42px;
-            font-weight: 700;
-            color: #fff;
-            text-shadow: 0 4px 10px rgba(0,0,0,0.6);
+            align-items: flex-end;
             line-height: 1;
         }
-        
-        .info-item.highlight .info-value {
-             color: #d4b163;
-             text-shadow: 0 0 15px rgba(212, 177, 99, 0.4);
+
+        .time-label {
+            font-size: 10px;
+            color: #d4b163;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 2px;
         }
 
-        .role-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 15px;
+        .time-value {
+            font-family: 'Oswald', sans-serif;
+            font-size: 24px; 
+            color: #fff;
+            font-weight: 700;
+            text-shadow: 0 0 10px rgba(212, 177, 99, 0.4);
         }
 
-        .role-card {
-            background: rgba(30, 34, 42, 0.6);
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            position: relative;
-            overflow: visible;
-            transition: all 0.3s;
+        .challenge-body {
             display: flex;
-            flex-direction: column;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-        }
-        
-        .role-card:hover {
-             transform: translateY(-4px);
-             box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-             border-color: rgba(212, 177, 99, 0.4);
-             z-index: 10;
-        }
-
-        .role-card[data-rarity="5"] {
-            background: linear-gradient(180deg, rgba(212, 177, 99, 0.05) 0%, rgba(30, 34, 42, 0.8) 100%);
-            border-top: 2px solid rgba(212, 177, 99, 0.4);
-        }
-        
-        .role-card[data-rarity="4"] {
-             border-top: 2px solid rgba(132, 63, 161, 0.4);
-        }
-
-        .role-header {
+            padding: 15px 18px;
+            gap: 12px;
             position: relative;
-            width: 100%;
-            aspect-ratio: 1 / 1;
-            background-color: rgba(0,0,0,0.2);
-            border-radius: 10px 10px 0 0;
-            overflow: hidden;
-        }
-
-        .role-avatar {
-            width: 85%;
-            height: 85%;
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            object-fit: cover;
-            object-position: top center;
-            border-radius: 8px;
-            transition: transform 0.4s ease;
+            align-items: center;
+            justify-content: space-between;
         }
         
-        .role-card:hover .role-avatar {
-            transform: scale(1.05);
+        .boss-img-container {
+            width: 130px; 
+            height: 100px; 
+            flex-shrink: 0;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.08);
+            position: relative;
+            background: radial-gradient(circle, rgba(50,50,50,1) 0%, rgba(30,30,30,1) 100%);
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
         }
-
-        .attribute-icon {
-            position: absolute;
-            top: 6px;
-            right: 6px;
-            width: 34px;
-            height: 34px;
-            background: rgba(0, 0, 0, 0.5);
-            border-radius: 50%;
-            padding: 4px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(2px);
-            z-index: 2;
-        }
-
-        .attribute-icon img {
+        
+        .boss-img {
             width: 100%;
             height: 100%;
-            display: block;
+            object-fit: cover;
+            object-position: center 20%;
         }
 
-        .role-level-badge {
-            position: absolute;
-            top: 6px;
-            left: 0;
-            background: linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.7) 80%, transparent 100%);
-            padding: 4px 10px 4px 8px;
-            color: #fff;
-            font-family: 'Oswald', sans-serif;
-            font-size: 22px;
-            font-weight: 700;
-            text-shadow: 0 1px 3px black;
-            z-index: 2;
-            border-radius: 0 12px 12px 0;
-            border-left: 2px solid #d4b163;
+        .team-container {
+            flex: 1;
+            min-width: 0; 
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-end;
         }
 
-        .role-info-container {
-            position: absolute;
-            bottom: -25px;
-            left: 0;
-            width: 100%;
-            height: 60px;
-            pointer-events: none;
+        .team-grid {
+            display: flex;
+            gap: 10px; 
+            justify-content: flex-end;
+            align-items: flex-start;
+        }
+
+        /* ----------------------------------------------------
+           NEW ROLE MINI STYLE (Adapted from Role Card Template)
+           ---------------------------------------------------- */
+        .role-mini {
+            width: 80px;
+            height: 80px;
+            border-radius: 8px; /* Changed from 50% circle to rounded square */
+            background: #2a2e35;
+            border: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+            overflow: hidden; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+            transition: transform 0.2s;
+            flex-shrink: 0; 
+        }
+        
+        .role-mini:hover {
+            transform: scale(1.05);
             z-index: 5;
         }
 
-        .weapon-large {
-            position: absolute;
-            bottom: 5px;
-            left: -15px;
-            width: 84px;
-            height: 84px;
-            border-radius: 8px;
-            background: rgba(34, 34, 34, 0.85);
-            border: 1px solid rgba(255,255,255,0.25);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.6);
-            overflow: hidden;
-            z-index: 10;
-            transform: rotate(-5deg);
+        /* Border colors for rarity */
+        .role-mini[data-star="5"] {
+            border-color: #d4b163;
+            box-shadow: 0 0 8px rgba(212, 177, 99, 0.3);
         }
         
-        .weapon-large img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
+        .role-mini[data-star="4"] {
+            border-color: #9c27b0;
+            box-shadow: 0 0 8px rgba(156, 39, 176, 0.3);
         }
 
-        .chain-large {
-            position: absolute;
-            bottom: 8px;
-            right: 0;
-            font-size: 20px;
-            font-weight: 800;
-            padding: 2px 10px 2px 14px;
-            background: linear-gradient(-90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 80%, transparent 100%);
-            border-radius: 12px 0 0 12px;
-            text-align: right;
-            font-family: 'Oswald', sans-serif;
-            z-index: 6;
-            border-right: 4px solid transparent; 
-            color: #fff;
+        .role-mini img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 8px; /* Match container */
         }
         
-        /* Chain colors - applied to border-right and text shadow */
+        /* NEW LEVEL STYLE: Top-Left (like Template 2)
+        */
+        .role-mini-level {
+            position: absolute;
+            top: 4px;
+            left: 0;
+            right: auto; 
+            bottom: auto;
+            background: linear-gradient(90deg, rgba(0,0,0,0.85) 0%, transparent 100%);
+            color: #fff;
+            font-size: 12px;
+            padding: 2px 6px 2px 4px;
+            border-radius: 0 4px 4px 0;
+            border-left: 2px solid #d4b163; /* Accent line on left */
+            font-family: 'Oswald', sans-serif;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            z-index: 2;
+            line-height: 1;
+            text-shadow: 0 1px 2px black;
+        }
+
+        /* NEW CHAIN STYLE: Bottom-Right (like Template 2)
+        */
+        .role-chain {
+            position: absolute;
+            bottom: 4px;
+            right: 0;
+            top: auto;
+            left: auto;
+            font-size: 12px;
+            font-weight: 800;
+            padding: 2px 6px 2px 10px;
+            background: linear-gradient(-90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 80%, transparent 100%);
+            border-radius: 4px 0 0 4px;
+            text-align: right;
+            font-family: 'Oswald', sans-serif;
+            z-index: 3;
+            border-left: none; /* Remove old left border */
+            border-right: 3px solid transparent; /* New right border */
+            color: #fff;
+            line-height: 1;
+        }
+
+        /* Chain colors - applied to border-RIGHT and text shadow */
         .chain-0 {
             border-right-color: #666;
             color: #aaa;
         }
-        
+
         .chain-1 {
             border-right-color: {{ chain_colors[1] }};
             text-shadow: 0 0 8px {{ chain_colors[1] }};
@@ -474,7 +515,8 @@
         }
 
         .footer {
-            margin-top: 10px;
+            margin-top: -10px;
+            margin-bottom: -20px;
             text-align: center;
             width: 100%;
             opacity: 0.6;
@@ -491,7 +533,7 @@
         </div>
 
         <div class="user-card">
-            <div class="deco-text">ROVER RESONANCE CARD</div>
+            <div class="deco-text">CHALLENGE REPORT</div>
             
             <div class="avatar-container">
                 <div class="avatar-ring"></div>
@@ -519,55 +561,52 @@
             </div>
         </div>
 
-        {% if show_stats and base_info_list %}
         <div class="section-container">
             <div class="section-header">
-                <div class="section-title">数据概览</div>
+                <div class="section-title">全息战略</div>
                 <div class="section-deco-line"></div>
+                {% if current_date %}
+                <div style="font-family: 'Oswald'; color: #888; font-size: 18px; font-weight: bold; margin-left: 15px;">{{ current_date }}</div>
+                {% endif %}
             </div>
-            <div class="base-info-grid">
-                {% for item in base_info_list %}
-                <div class="info-item {% if item.highlight %}highlight{% endif %}">
-                    <div class="info-key">{{ item.key }}</div>
-                    <div class="info-value">{{ item.value }}</div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="section-container">
-            <div class="section-header">
-                <div class="section-title">共鸣者</div>
-                <div class="section-deco-line"></div>
-            </div>
-            <div class="role-grid">
-                {% for role in role_list %}
-                <div class="role-card" data-rarity="{{ role.rarity if role.rarity else '4' }}">
-                    <div class="role-header">
-                        <img src="{{ role.avatar_icon }}" alt="{{ role.name }}" class="role-avatar">
-                        
-                        {% if role.attribute_icon %}
-                        <div class="attribute-icon">
-                            <img src="{{ role.attribute_icon }}" alt="属性">
+            
+            <div class="challenge-grid">
+                {% for challenge in challenges %}
+                <div class="challenge-item">
+                    <div class="challenge-header">
+                        <div class="boss-name-group">
+                            <div class="boss-name">{{ challenge.boss_name }}</div>
+                            <div class="boss-level">Lv.{{ challenge.boss_level }}</div>
                         </div>
-                        {% endif %}
-                        
-                        <div class="role-level-badge">Lv.{{ role.level }}</div>
+                        <div class="header-right">
+                            <div class="difficulty-badge">难度 {{ challenge.boss_difficulty }}/{{ challenge.max_difficulty }}</div>
+                            <div class="time-display">
+                                <div class="time-label">TIME</div>
+                                <div class="time-value">{{ challenge.pass_time }}</div>
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="role-info-container">
-                        {% if role.weapon_icon %}
-                        <div class="weapon-large">
-                             <img src="{{ role.weapon_icon }}" alt="武器">
+                    <div class="challenge-body">
+                        <div class="boss-img-container">
+                            <img src="{{ challenge.boss_icon_url }}" class="boss-img" alt="Boss">
                         </div>
-                        {% endif %}
                         
-                        {% if role.chain_name %}
-                        <div class="chain-large chain-{{ role.chain_num }}">{{ role.chain_name }}</div>
-                        {% else %}
-                        <div class="chain-large chain-0">零链</div>
-                        {% endif %}
+                        <div class="team-container">
+                            <div class="team-grid">
+                                {% for role in challenge.roles %}
+                                <div class="role-mini" data-star="{{ role.star }}">
+                                    <img src="{{ role.icon_url }}" alt="Role">
+                                    <div class="role-mini-level">Lv.{{ role.level }}</div>
+                                    {% if role.chain_name %}
+                                    <div class="role-chain chain-{{ role.chain_num }}">{{ role.chain_name }}</div>
+                                    {% else %}
+                                    <div class="role-chain chain-0">零链</div>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                 </div>
                 {% endfor %}

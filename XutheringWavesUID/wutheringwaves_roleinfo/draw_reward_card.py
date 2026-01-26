@@ -223,7 +223,7 @@ async def draw_reward_img(uid: str, ck: str, ev: Event):
     }
 
     logger.debug("[鸣潮] 准备通过HTML渲染积分卡片")
-    img_bytes = await render_html(waves_templates, "reward_card.html", context)
+    img_bytes = await render_html(waves_templates, "roleinfo/reward_card.html", context)
 
     if img_bytes:
         return img_bytes

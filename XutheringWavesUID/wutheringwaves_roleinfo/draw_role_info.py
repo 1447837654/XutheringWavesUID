@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime, timezone, timedelta
 
 from gsuid_core.models import Event
 from gsuid_core.logger import logger
@@ -158,6 +159,9 @@ async def draw_role_img(uid: str, ck: str, ev: Event):
         chain_colors = {i: f"rgba({r}, {g}, {b}, 0.8)" for i, (r, g, b) in CHAIN_COLOR.items()}
         chain_border_colors = {i: f"rgba({r}, {g}, {b}, 1)" for i, (r, g, b) in CHAIN_COLOR.items()}
 
+        # 当前日期
+        current_date = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
+
         # 准备模板数据
         context = {
             "user_name": account_info.name[:7],
@@ -167,6 +171,7 @@ async def draw_role_img(uid: str, ck: str, ev: Event):
             "show_stats": account_info.is_full,
             "avatar_url": avatar_url,
             "bg_url": bg_url,
+            "current_date": current_date,
             "base_info_list": base_info_list,
             "role_list": role_list_data,
             "footer_b64": get_footer_b64(footer_type="white") or "",
@@ -175,7 +180,7 @@ async def draw_role_img(uid: str, ck: str, ev: Event):
         }
 
         logger.debug("[鸣潮] 准备通过HTML渲染角色卡片")
-        img_bytes = await render_html(waves_templates, "role_card.html", context)
+        img_bytes = await render_html(waves_templates, "roleinfo/role_card.html", context)
         if img_bytes:
             return img_bytes
         else:
