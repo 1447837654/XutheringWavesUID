@@ -6,6 +6,7 @@ from pathlib import Path
 
 from msgspec import json as msgjson
 
+from ..wutheringwaves_config import WutheringWavesConfig
 from ..utils.resource.RESOURCE_PATH import (
     MAP_FORTE_PATH,
     ROLE_PILE_PATH,
@@ -26,19 +27,11 @@ from ..utils.render_utils import (
     image_to_base64,
     render_html,
 )
+from ..utils.image import ELEMENT_COLOR_MAP
 
 
 TEXTURE2D_PATH = Path(__file__).parents[1] / "utils" / "texture2d"
 WIKI_TEXTURE_PATH = Path(__file__).parent / "texture2d"
-
-ELEMENT_COLOR_MAP = {
-    "冷凝": "#3598db", # Glacio
-    "热熔": "#ba372a", # Fusion
-    "导电": "#b96ad9", # Electro
-    "气动": "#169179", # Aero
-    "衍射": "#f1c40f", # Spectro
-    "湮灭": "#843fa1", # Havoc
-}
 
 WIKI_RENDER_CACHE: Dict[tuple[str, str], Path] = {}
 
@@ -62,6 +55,15 @@ def save_wiki_cache(char_id: str, render_type: str, content: bytes) -> None:
 
     file_path.write_bytes(content)
     WIKI_RENDER_CACHE[(char_id, render_type)] = file_path
+
+from PIL import Image
+from io import BytesIO
+
+def pil_to_base64(img: Image.Image) -> str:
+    """将PIL Image转换为base64字符串"""
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 def _get_base_context(char_model: CharacterModel, char_id: str) -> Dict[str, Any]:
     max_stats: Stats = char_model.get_max_level_stat()
@@ -90,8 +92,9 @@ def _get_base_context(char_model: CharacterModel, char_id: str) -> Dict[str, Any
     
     rarity_path = WIKI_TEXTURE_PATH / f"rarity_{char_model.starLevel}.png"
     
-    # Background
+    # Background - 顺时针旋转90度
     bg_path = TEXTURE2D_PATH / "bg6.jpg"
+    bg_img = Image.open(bg_path).transpose(Image.ROTATE_270)
 
     # Role Pile
     role_pile_path = ROLE_PILE_PATH / f"role_pile_{char_id}.png"
@@ -121,14 +124,15 @@ def _get_base_context(char_model: CharacterModel, char_id: str) -> Dict[str, Any
         "element_icon": image_to_base64(element_icon_path),
         "weapon_icon": image_to_base64(weapon_icon_path),
         "rarity_icon": image_to_base64(rarity_path),
-        "bg_url": image_to_base64(bg_path),
+        "bg_url": pil_to_base64(bg_img),
         "portrait_url": image_to_base64(role_pile_path),
         "hakushin_logo": hakushin_logo,
         "footer_url": image_to_base64(TEXTURE2D_PATH / "footer_hakush.png"),
     }
 
 async def draw_char_skill_render(char_id: str):
-    if not PLAYWRIGHT_AVAILABLE or render_html is None:
+    use_html_render = WutheringWavesConfig.get_config("UseHtmlRender").data
+    if not PLAYWRIGHT_AVAILABLE or render_html is None or not use_html_render:
         return None
     
     cache_content = get_wiki_cache(char_id, "skill")
@@ -143,13 +147,14 @@ async def draw_char_skill_render(char_id: str):
     context["section"] = "skill"
     context["skills"] = await prepare_char_skill_data(char_model.skillTree)
     
-    res = await render_html(waves_templates, "char_wiki.html", context)
+    res = await render_html(waves_templates, "wiki/char_wiki.html", context)
     if res:
         save_wiki_cache(char_id, "skill", res)
     return res
 
 async def draw_char_chain_render(char_id: str):
-    if not PLAYWRIGHT_AVAILABLE or render_html is None:
+    use_html_render = WutheringWavesConfig.get_config("UseHtmlRender").data
+    if not PLAYWRIGHT_AVAILABLE or render_html is None or not use_html_render:
         return None
     
     cache_content = get_wiki_cache(char_id, "chain")
@@ -164,13 +169,14 @@ async def draw_char_chain_render(char_id: str):
     context["section"] = "chain"
     context["chains"] = await prepare_char_chain_data(char_model.chains)
 
-    res = await render_html(waves_templates, "char_wiki.html", context)
+    res = await render_html(waves_templates, "wiki/char_wiki.html", context)
     if res:
         save_wiki_cache(char_id, "chain", res)
     return res
 
 async def draw_char_forte_render(char_id: str):
-    if not PLAYWRIGHT_AVAILABLE or render_html is None:
+    use_html_render = WutheringWavesConfig.get_config("UseHtmlRender").data
+    if not PLAYWRIGHT_AVAILABLE or render_html is None or not use_html_render:
         return None
     
     cache_content = get_wiki_cache(char_id, "forte")
@@ -192,7 +198,7 @@ async def draw_char_forte_render(char_id: str):
     context["section"] = "forte"
     context["forte"] = await prepare_char_forte_data_render(data, str(char_id))
 
-    res = await render_html(waves_templates, "char_wiki.html", context)
+    res = await render_html(waves_templates, "wiki/char_wiki.html", context)
     if res:
         save_wiki_cache(char_id, "forte", res)
     return res

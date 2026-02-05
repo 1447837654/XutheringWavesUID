@@ -11,9 +11,10 @@ from gsuid_core.logger import logger
 from gsuid_core.models import Event
 from gsuid_core.subscribe import gs_subscribe
 
-from .ann_card_render import ann_list_card, ann_detail_card
+from .ann_card import ann_list_card, ann_detail_card
 from ..utils.waves_api import waves_api
 from ..wutheringwaves_config import WutheringWavesConfig
+from ..wutheringwaves_config.ann_config import get_ann_new_ids, set_ann_new_ids
 from ..utils.resource.RESOURCE_PATH import ANN_CARD_PATH, CALENDAR_PATH, WIKI_CACHE_PATH
 from ..utils.database.waves_subscribe import WavesSubscribe
 
@@ -61,8 +62,8 @@ async def ann_(bot: Bot, ev: Event):
 
 @sv_ann_sub.on_fullmatch("订阅公告")
 async def sub_ann_(bot: Bot, ev: Event):
-    if ev.bot_id != "onebot":
-        logger.debug(f"非onebot禁止订阅鸣潮公告 【{ev.bot_id}】")
+    if ev.bot_id != "onebot" and ev.bot_id != "feishu":
+        logger.debug(f"非onebot/feishu禁止订阅鸣潮公告 【{ev.bot_id}】")
         return
 
     if ev.group_id is None:
@@ -134,14 +135,14 @@ async def check_waves_ann_state():
         logger.info("[鸣潮公告] 暂无群订阅")
         return
 
-    ids = WutheringWavesConfig.get_config("WavesAnnNewIds").data
+    ids = get_ann_new_ids()
     new_ann_list = await waves_api.get_ann_list()
     if not new_ann_list:
         return
 
     new_ann_ids = [x["id"] for x in new_ann_list]
     if not ids:
-        WutheringWavesConfig.set_config("WavesAnnNewIds", new_ann_ids)
+        set_ann_new_ids(new_ann_ids)
         logger.info("[鸣潮公告] 初始成功, 将在下个轮询中更新.")
         return
 
@@ -156,7 +157,7 @@ async def check_waves_ann_state():
 
     logger.info(f"[鸣潮公告] 更新公告id: {new_ann_need_send}")
     save_ids = sorted(ids, reverse=True) + new_ann_ids
-    WutheringWavesConfig.set_config("WavesAnnNewIds", list(set(save_ids)))
+    set_ann_new_ids(list(set(save_ids)))
 
     for ann_id in new_ann_need_send:
         try:
@@ -294,3 +295,30 @@ async def clean_cache_on_startup():
 
     result = await clean_cache_directories(days)
     logger.info(f"[缓存清理] {result}")
+
+
+def migrate_ann_config_to_json():
+    """迁移公告配置到独立JSON文件"""
+    try:
+        try:
+            config_new_ids = WutheringWavesConfig.get_config("WavesAnnNewIds").data
+        except Exception:
+            return
+
+        if config_new_ids:
+            current_json_ids = get_ann_new_ids()
+            if not current_json_ids:
+                logger.info("[鸣潮公告] 开始迁移公告ID数据到独立JSON文件...")
+                set_ann_new_ids(config_new_ids)
+                logger.info(f"[鸣潮公告] 成功迁移 {len(config_new_ids)} 个公告ID")
+
+                try:
+                    WutheringWavesConfig.set_config("WavesAnnNewIds", [])
+                    logger.info("[鸣潮公告] 已清空配置文件中的公告ID数据")
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.warning(f"[鸣潮公告] 迁移公告配置时出现异常: {e}")
+
+
+migrate_ann_config_to_json()

@@ -43,6 +43,81 @@ class BattlePassData(BaseModel):
     total: int
 
 
+class TowerData(BaseModel):
+    """逆境深塔"""
+
+    name: str
+    img: Optional[str] = None
+    key: Optional[str] = None
+    value: Optional[str] = None
+    status: Optional[int] = None
+    cur: int
+    total: int
+    refreshTimeStamp: int
+    timePreDesc: Optional[str] = None
+    expireTimeStamp: Optional[int] = None
+
+
+class SlashTowerData(BaseModel):
+    """冥歌海墟"""
+
+    name: str
+    img: Optional[str] = None
+    key: Optional[str] = None
+    value: Optional[str] = None
+    status: Optional[int] = None
+    cur: int
+    total: int
+    refreshTimeStamp: int
+    timePreDesc: Optional[str] = None
+    expireTimeStamp: Optional[int] = None
+
+
+class WeeklyData(BaseModel):
+    """周本"""
+
+    name: str
+    img: Optional[str] = None
+    key: Optional[str] = None
+    value: Optional[str] = None
+    status: Optional[int] = None
+    cur: int
+    total: int
+    refreshTimeStamp: int
+    timePreDesc: Optional[str] = None
+    expireTimeStamp: Optional[int] = None
+
+
+class WeeklyRougeData(BaseModel):
+    """千道门扉的异想"""
+
+    name: str
+    img: Optional[str] = None
+    key: Optional[str] = None
+    value: Optional[str] = None
+    status: Optional[int] = None
+    cur: int
+    total: int
+    refreshTimeStamp: int
+    timePreDesc: Optional[str] = None
+    expireTimeStamp: Optional[int] = None
+
+
+class StoreEnergyData(BaseModel):
+    """结晶单质"""
+
+    name: str
+    img: Optional[str] = None
+    key: Optional[str] = None
+    value: Optional[str] = None
+    status: Optional[int] = None
+    cur: int
+    total: int
+    refreshTimeStamp: int
+    timePreDesc: Optional[str] = None
+    expireTimeStamp: Optional[int] = None
+
+
 class DailyData(BaseModel):
     """每日数据"""
 
@@ -56,6 +131,23 @@ class DailyData(BaseModel):
     energyData: EnergyData
     livenessData: LivenessData
     battlePassData: List[BattlePassData]
+    storeEnergyData: Optional[StoreEnergyData] = None
+    towerData: Optional[TowerData] = None
+    slashTowerData: Optional[SlashTowerData] = None
+    weeklyData: Optional[WeeklyData] = None
+    weeklyRougeData: Optional[WeeklyRougeData] = None
+
+
+class RoleSkin(BaseModel):
+    """角色皮肤"""
+    isAddition: Optional[bool] = None
+    picUrl: Optional[str] = None
+    priority: Optional[int] = None
+    quality: Optional[int] = None
+    qualityName: Optional[str] = None
+    skinIcon: Optional[str] = None
+    skinId: Optional[int] = None
+    skinName: Optional[str] = None
 
 
 class Role(BaseModel):
@@ -63,15 +155,18 @@ class Role(BaseModel):
     level: int
     breach: Optional[int] = None
     roleName: str
-    roleIconUrl: Optional[str]
-    rolePicUrl: Optional[str]
+    roleIconUrl: Optional[str] = None
+    rolePicUrl: Optional[str] = None
     starLevel: int
     attributeId: int
-    attributeName: Optional[str]
+    attributeName: Optional[str] = None
     weaponTypeId: int
-    weaponTypeName: Optional[str]
-    acronym: str
+    weaponTypeName: Optional[str] = None
+    acronym: Optional[str] = None
     chainUnlockNum: Optional[int] = None
+    isMainRole: Optional[bool] = None
+    totalSkillLevel: Optional[int] = None
+    roleSkin: Optional[RoleSkin] = None
     # mapRoleId: int | None
 
 
@@ -401,6 +496,7 @@ class ExploreItem(BaseModel):
     name: str
     progress: int
     type: int
+    icon: Optional[str] = None
 
 
 class AreaInfo(BaseModel):

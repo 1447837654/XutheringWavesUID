@@ -1,5 +1,6 @@
 import os
 import random
+import base64
 from io import BytesIO
 from typing import Tuple, Union, Literal, Optional
 from pathlib import Path
@@ -20,6 +21,7 @@ from gsuid_core.utils.image.image_tools import crop_center_img
 
 from ..utils.resource.RESOURCE_PATH import (
     AVATAR_PATH,
+    CACHE_PATH,
     WEAPON_PATH,
     ROLE_BG_PATH,
     SHARE_BG_PATH,
@@ -80,6 +82,30 @@ WAVES_SHUXING_MAP = {
     "气动": WAVES_SIERRA,
     "衍射": WAVES_CELESTIAL,
     "湮灭": WAVES_SINKING,
+}
+
+
+def rgb_to_hex(rgb: Tuple) -> str:
+    """将RGB/RGBA元组转换为十六进制或rgba颜色字符串"""
+    if len(rgb) == 4:
+        return "rgba({}, {}, {}, {})".format(rgb[0], rgb[1], rgb[2], rgb[3])
+    return "#{:02x}{:02x}{:02x}".format(rgb[0], rgb[1], rgb[2])
+
+
+def pil_to_b64(img: Image.Image) -> str:
+    """将PIL图像转换为base64编码的data URL"""
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+
+ELEMENT_COLOR_MAP = {
+    "冷凝": rgb_to_hex(WAVES_FREEZING),
+    "热熔": rgb_to_hex(WAVES_MOLTEN),
+    "导电": rgb_to_hex(WAVES_VOID),
+    "气动": rgb_to_hex(WAVES_SIERRA),
+    "衍射": rgb_to_hex(WAVES_CELESTIAL),
+    "湮灭": rgb_to_hex(WAVES_SINKING),
 }
 
 CHAIN_COLOR = {
@@ -252,7 +278,7 @@ async def get_square_weapon(resource_id: Union[int, str]) -> Image.Image:
     if os.path.exists(path):
         return Image.open(path).convert("RGBA")
     else:
-        return Image.open(WEAPON_PATH / "weapon_21010063.png").convert("RGBA")
+        return Image.open(WEAPON_PATH / "weapon_21020012.png").convert("RGBA")
 
 
 async def get_attribute(name: str = "", is_simple: bool = False) -> Image.Image:
@@ -270,41 +296,46 @@ async def get_attribute_prop(name: str = "") -> Image.Image:
         return Image.open(TEXT_PATH / "attribute_prop" / "attr_prop_攻击.png").convert("RGBA")
 
 async def get_attribute_skill(name: str = "") -> Image.Image:
-    if (TEXT_PATH / "attribute_skill" / f"attribute_skill_{name}.png").exists():
-        return Image.open(TEXT_PATH / "attribute_skill" / f"attribute_skill_{name}.png").convert("RGBA")
-    else:
-        return Image.open(TEXT_PATH / "attribute_skill" / "attribute_skill_共鸣模态·集谐.png").convert("RGBA")
+    if not name:
+        return Image.new("RGBA", (100, 100), (0, 0, 0, 0))
+    cache_dir = CACHE_PATH / "attribute_skill"
+    cache_path = cache_dir / f"{name}.png"
+    if cache_path.exists():
+        return Image.open(cache_path).convert("RGBA")
+    return Image.new("RGBA", (100, 100), (0, 0, 0, 0))
 
 async def get_attribute_effect(name: str = "") -> Image.Image:
     if (TEXT_PATH / "attribute_effect" / f"attr_{name}.png").exists():
         return Image.open(TEXT_PATH / "attribute_effect" / f"attr_{name}.png").convert("RGBA")
     else:
-        return Image.open(TEXT_PATH / "attribute_effect" / "attr_不绝余音.png").convert("RGBA")
+        return Image.open(TEXT_PATH / "attribute_effect" / "attr.png").convert("RGBA")
 
 
 async def get_weapon_type(name: str = "") -> Image.Image:  # 出新武器改这里
     return Image.open(TEXT_PATH / f"weapon_type/weapon_type_{name}.png").convert("RGBA")
 
 
-def get_waves_bg(w: int, h: int, bg: str = "bg") -> Image.Image:
+def get_waves_bg(w: int = 0, h: int = 0, bg: str = "bg", crop: bool = True) -> Image.Image:
     img = Image.open(TEXT_PATH / f"{bg}.jpg").convert("RGBA")
-    return crop_center_img(img, w, h)
+    return crop_center_img(img, w, h) if crop else img
 
 
 def get_custom_waves_bg(  # 不是所有地方都适合替换为custom，函数分开
-    w: int,
-    h: int,
+    w: int = 0,
+    h: int = 0,
     bg: str = "bg",
+    crop: bool = True,
 ):
+    assert not crop or (w != 0 and h != 0), "裁剪图片时需要指定宽高"
     img: Optional[Image.Image] = None
     if ShowConfig.get_config("CardBg").data:
         bg_path = Path(ShowConfig.get_config("CardBgPath").data)
         if bg_path.exists():
             img = Image.open(bg_path).convert("RGBA")
-            img = crop_center_img(img, w, h)
-
+            if crop and img:
+                img = crop_center_img(img, w, h)
     if not img:
-        img = get_waves_bg(w, h, bg)
+        img = get_waves_bg(w, h, bg, crop=crop)
 
     img = _get_custom_gaussian_blur(img)
     return img
@@ -376,7 +407,7 @@ async def get_event_avatar(
             img = Image.open(path).convert("RGBA")
 
     if img is None:
-        img = await get_square_avatar(1203)
+        img = await get_square_avatar(1503)
 
     return img
 
@@ -433,6 +464,10 @@ async def change_color(
 
     if not isinstance(h, int) or not isinstance(w, int):
         return chain
+
+    # 如果 color 是 RGBA，只取前三个
+    if len(color) == 4:
+        color = color[:3]
 
     # 遍历图像的每个像素
     for y in range(h):  # 图像高度
