@@ -111,11 +111,32 @@ async def get_guide_pic(guide_path: Path, pattern: re.Pattern, guide_author: str
     return imgs
 
 
+WEBP_MAX_DIMENSION = 16383
+
+
+def resize_for_webp(img: Image.Image) -> Image.Image:
+    """
+    如果图片尺寸超过WebP限制(16383像素)，按比例缩放
+    """
+    width, height = img.size
+    if width <= WEBP_MAX_DIMENSION and height <= WEBP_MAX_DIMENSION:
+        return img
+
+    scale = min(WEBP_MAX_DIMENSION / width, WEBP_MAX_DIMENSION / height)
+    new_width = int(width * scale)
+    new_height = int(height * scale)
+    logger.info(f"[鸣潮] 攻略图尺寸{width}x{height}超过WebP限制，缩放至{new_width}x{new_height}")
+    return img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+
 def compress_image_to_webp(img: Image.Image, max_size_mb: int) -> bytes:
     """
     将图片转为webp格式，若超过max_size_mb则逐步降低质量压缩
     """
     max_size_bytes = max_size_mb * 1024 * 1024
+
+    # 检查并缩放超大图片
+    img = resize_for_webp(img)
 
     # 先尝试100%质量
     buffer = BytesIO()
