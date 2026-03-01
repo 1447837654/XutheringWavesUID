@@ -31,6 +31,8 @@ from ..utils.fonts.waves_fonts import (
 from ..utils.resource.download_file import get_material_img
 from .other_wiki_render import draw_weapon_wiki_render
 
+from ..utils.util import clean_tags
+
 TEXT_PATH = Path(__file__).parent / "texture2d"
 
 
@@ -117,7 +119,7 @@ async def parse_weapon_detail_content(weapon_model: WeaponModel, card_img):
     image_draw = ImageDraw.Draw(image)
     image_draw.rounded_rectangle([20, 20, 630, 250], radius=20, fill=(0, 0, 0, int(0.3 * 255)))
     title = weapon_model.effectName
-    desc = weapon_model.get_effect_detail()
+    desc = clean_tags(weapon_model.get_effect_detail())
 
     # 分行显示标题
     wrapped_title = textwrap.fill(title, width=10)
@@ -168,7 +170,7 @@ async def create_image(weapon_id, weapon_model: WeaponModel):
     await parse_weapon_detail_content(weapon_model, card_img)
     await parse_weapon_material_content(weapon_model, card_img)
     card_img.alpha_composite(weapon_image, (0, 0))
-    card_img = add_footer(card_img, 800, 20, color="hakush")
+    card_img = add_footer(card_img, 800, 20, color="white")
     card_img = await convert_img(card_img)
     return card_img
 
