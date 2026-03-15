@@ -28,6 +28,7 @@ from ..utils.render_utils import (
     render_html,
 )
 from ..utils.image import ELEMENT_COLOR_MAP
+from ..utils.resource.download_file import get_material_img
 
 
 TEXTURE2D_PATH = Path(__file__).parents[1] / "utils" / "texture2d"
@@ -65,7 +66,7 @@ def pil_to_base64(img: Image.Image) -> str:
     img.save(buffered, format="PNG")
     return "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-def _get_base_context(char_model: CharacterModel, char_id: str) -> Dict[str, Any]:
+async def _get_base_context(char_model: CharacterModel, char_id: str) -> Dict[str, Any]:
     max_stats: Stats = char_model.get_max_level_stat()
     
     stats = {
@@ -118,6 +119,16 @@ def _get_base_context(char_model: CharacterModel, char_id: str) -> Dict[str, Any
             data = f.read()
         hakushin_logo = f"data:image/svg+xml;base64,{base64.b64encode(data).decode('utf-8')}"
 
+    # 突破材料
+    materials = []
+    for material_id in char_model.get_ascensions_max_list():
+        try:
+            material_img = await get_material_img(material_id)
+            if material_img:
+                materials.append(pil_to_base64(material_img))
+        except Exception:
+            pass
+
     return {
         "char_data": char_data,
         "theme_color": theme_color,
@@ -127,6 +138,7 @@ def _get_base_context(char_model: CharacterModel, char_id: str) -> Dict[str, Any
         "bg_url": pil_to_base64(bg_img),
         "portrait_url": image_to_base64(role_pile_path),
         "hakushin_logo": hakushin_logo,
+        "materials": materials,
         "footer_url": image_to_base64(TEXTURE2D_PATH / "footer_white.png"),
     }
 
@@ -143,7 +155,7 @@ async def draw_char_skill_render(char_id: str):
     if char_model is None:
         return None
 
-    context = _get_base_context(char_model, char_id)
+    context = await _get_base_context(char_model, char_id)
     context["section"] = "skill"
     context["skills"] = await prepare_char_skill_data(char_model.skillTree)
 
@@ -171,7 +183,7 @@ async def draw_char_chain_render(char_id: str):
     if char_model is None:
         return None
 
-    context = _get_base_context(char_model, char_id)
+    context = await _get_base_context(char_model, char_id)
     context["section"] = "chain"
     context["chains"] = await prepare_char_chain_data(char_model.chains)
 
@@ -200,7 +212,7 @@ async def draw_char_forte_render(char_id: str):
     with open(forte_path, "rb") as f:
         data = msgjson.decode(f.read())
 
-    context = _get_base_context(char_model, char_id)
+    context = await _get_base_context(char_model, char_id)
     context["section"] = "forte"
     context["forte"] = await prepare_char_forte_data_render(data, str(char_id))
 
@@ -291,8 +303,6 @@ async def prepare_char_forte_data_render(data: Dict, char_id: str) -> Dict[str, 
         sorted_desc_keys = sorted(desc_map.keys())
         
         items = []
-        group_images_seen = set()
-        group_imgs_b64 = []
         for desc_key in sorted_desc_keys:
             item = desc_map[desc_key]
             desc_text = item.get("Desc", "")
@@ -317,26 +327,30 @@ async def prepare_char_forte_data_render(data: Dict, char_id: str) -> Dict[str, 
                     else:
                         final_desc += f"{{{part}}}"
 
-            # Collect images at group level (deduplicated)
+            # Collect images per item
+            item_imgs_b64 = []
             for img_path_str in image_list:
-                if img_path_str in group_images_seen:
+                if not img_path_str:
                     continue
-                group_images_seen.add(img_path_str)
                 img_name = os.path.basename(img_path_str)
-                if not img_name.lower().endswith((".png", ".webp", ".jpg")):
-                     img_name += ".png"
-                local_img_path = MAP_FORTE_PATH / char_id / img_name
-                if local_img_path.exists():
-                    group_imgs_b64.append(image_to_base64(local_img_path))
+                stem = os.path.splitext(img_name)[0]
+                local_img_path = None
+                for ext in (".png", ".webp", ".jpg"):
+                    candidate = MAP_FORTE_PATH / char_id / (stem + ext)
+                    if candidate.exists():
+                        local_img_path = candidate
+                        break
+                if local_img_path:
+                    item_imgs_b64.append(image_to_base64(local_img_path))
 
             items.append({
                 "desc": final_desc,
+                "images": item_imgs_b64,
             })
 
         groups.append({
             "name": group_name,
             "forte_items": items,
-            "images": group_imgs_b64,
         })
         
     return {

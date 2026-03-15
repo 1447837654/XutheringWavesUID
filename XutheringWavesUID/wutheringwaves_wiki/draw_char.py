@@ -40,8 +40,27 @@ from .char_wiki_render import (
 )
 
 from ..utils.util import clean_tags
+from ..utils.resource.download_file import get_material_img
 
 TEXT_PATH = Path(__file__).parent / "texture2d"
+
+
+async def draw_char_materials(char_model: CharacterModel, char_bg: Image.Image, x: int, y: int):
+    """在角色头部绘制突破材料图标"""
+    material_list = char_model.get_ascensions_max_list()
+    if not material_list:
+        return
+    index = 0
+    for material_id in material_list:
+        try:
+            material = await get_material_img(material_id)
+            if not material:
+                continue
+            material = material.resize((50, 50))
+            char_bg.alpha_composite(material, (x + index * 55, y))
+            index += 1
+        except Exception:
+            pass
 
 
 async def draw_char_wiki(char_id: str, query_role_type: str):
@@ -125,6 +144,7 @@ async def draw_char_forte_pil(char_id: str):
     char_bg.alpha_composite(char_pic, (0, -100))
     char_bg.alpha_composite(char_stats, (580, 340))
     char_bg.alpha_composite(rarity_pic, (560, 160))
+    await draw_char_materials(char_model, char_bg, 580, 210)
     card_img.paste(char_bg, (0, -5), char_bg)
     card_img.alpha_composite(forte_img, (0, 600))
 
@@ -207,10 +227,14 @@ async def parse_char_forte_data(data: Dict, char_id: str):
                     continue
                 group_image_paths_seen.add(img_path_str)
                 img_name = os.path.basename(img_path_str)
-                if not img_name.lower().endswith((".png", ".webp", ".jpg")):
-                     img_name += ".png"
-                local_img_path = MAP_FORTE_PATH / char_id / img_name
-                if local_img_path.exists():
+                stem = os.path.splitext(img_name)[0]
+                local_img_path = None
+                for ext in (".png", ".webp", ".jpg"):
+                    candidate = MAP_FORTE_PATH / char_id / (stem + ext)
+                    if candidate.exists():
+                        local_img_path = candidate
+                        break
+                if local_img_path:
                     try:
                         fg_img = Image.open(local_img_path).convert("RGBA")
                         content_width = image_width - 2 * (x_padding + shadow_radius)
@@ -391,6 +415,7 @@ async def draw_char_skill_pil(char_id: str):
     char_bg.alpha_composite(char_pic, (0, -100))
     char_bg.alpha_composite(char_stats, (580, 340))
     char_bg.alpha_composite(rarity_pic, (560, 160))
+    await draw_char_materials(char_model, char_bg, 580, 210)
     card_img.paste(char_bg, (0, -5), char_bg)
     card_img.alpha_composite(char_skill, (0, 600))
 
