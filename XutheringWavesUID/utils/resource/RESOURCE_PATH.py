@@ -62,6 +62,7 @@ MAP_FORTE_PATH = RESOURCE_PATH / "map" / "detail_json" / "forte"
 MAP_BUILD_PATH = BUILD_ROOT / "map" / "waves_build"
 MAP_BUILD_TEMP = MAIN_PATH / "build" / "map" / "waves_build"
 MAP_ALIAS_PATH = MAP_PATH / "alias"
+LOCALIZATION_PATH = MAP_PATH / "i18n"
 
 # 自定义背景图
 CUSTOM_CARD_PATH = MAIN_PATH / "custom_role_pile"
@@ -75,6 +76,7 @@ CALENDAR_PATH = OTHER_PATH / "calendar"
 SLASH_PATH = OTHER_PATH / "slash"
 CHALLENGE_PATH = OTHER_PATH / "challenge"
 ANN_CARD_PATH = OTHER_PATH / "ann_card"
+BAKE_PATH = OTHER_PATH / "bake"
 POKER_PATH = OTHER_PATH / "poker"
 WIKI_CACHE_PATH = OTHER_PATH / "wiki"
 BBS_PATH = OTHER_PATH / "bbs"
@@ -113,6 +115,7 @@ def init_dir():
         OTHER_PATH,
         CALENDAR_PATH,
         ANN_CARD_PATH,
+        BAKE_PATH,
         WIKI_CACHE_PATH,
         BBS_PATH,
         BUILD_PATH,

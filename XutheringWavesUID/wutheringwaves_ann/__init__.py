@@ -15,7 +15,7 @@ from .ann_card import ann_list_card, ann_detail_card
 from ..utils.waves_api import waves_api
 from ..wutheringwaves_config import WutheringWavesConfig
 from ..wutheringwaves_config.ann_config import get_ann_new_ids, set_ann_new_ids
-from ..utils.resource.RESOURCE_PATH import ANN_CARD_PATH, CALENDAR_PATH, WIKI_CACHE_PATH
+from ..utils.resource.RESOURCE_PATH import ANN_CARD_PATH, BAKE_PATH, CALENDAR_PATH, WIKI_CACHE_PATH
 from ..utils.database.waves_subscribe import WavesSubscribe
 
 sv_ann = SV("鸣潮公告")
@@ -60,7 +60,7 @@ async def ann_(bot: Bot, ev: Event):
     return await bot.send(img)  # type: ignore
 
 
-@sv_ann_sub.on_fullmatch("订阅公告")
+@sv_ann_sub.on_fullmatch(("订阅公告", "訂閱公告"))
 async def sub_ann_(bot: Bot, ev: Event):
     if ev.bot_id != "onebot" and ev.bot_id != "feishu" and ev.bot_id != "lark":
         logger.debug(f"非onebot/feishu/lark禁止订阅鸣潮公告 【{ev.bot_id}】")
@@ -99,7 +99,7 @@ async def sub_ann_(bot: Bot, ev: Event):
         await bot.send("成功订阅鸣潮公告!")
 
 
-@sv_ann_sub.on_fullmatch(("取消订阅公告", "取消公告", "退订公告"))
+@sv_ann_sub.on_fullmatch(("取消订阅公告", "取消公告", "退订公告", "取消訂閱公告", "退訂公告"))
 async def unsub_ann_(bot: Bot, ev: Event):
     if ev.bot_id != "onebot":
         logger.debug(f"非onebot禁止订阅鸣潮公告 【{ev.bot_id}】")
@@ -257,15 +257,33 @@ async def clean_cache_directories(days: int) -> str:
         total_count += wiki_count
         total_space += wiki_space
 
+    # 烘焙缓存（含子目录）
+    bake_count, bake_space = 0, 0.0
+    if BAKE_PATH.exists():
+        cutoff = time.time() - (days * 86400)
+        for f in BAKE_PATH.rglob("*"):
+            if f.is_file() and f.stat().st_ctime < cutoff:
+                try:
+                    sz = f.stat().st_size
+                    f.unlink()
+                    bake_count += 1
+                    bake_space += sz
+                except Exception:
+                    pass
+    if bake_count > 0:
+        results.append(f"烘焙: {bake_count}个文件, {bake_space / 1024 / 1024:.2f}MB")
+        total_count += bake_count
+        total_space += bake_space / 1024 / 1024
+
     if total_count == 0:
-        return f"没有找到需要清理的缓存文件(公告/日历保留{days}天内的文件，wiki全部删除)"
+        return f"没有找到需要清理的缓存文件(公告/日历/烘焙保留{days}天内的文件，wiki全部删除)"
 
     result_msg = f"[鸣潮] 清理完成！共删除{total_count}个文件，{total_space:.2f}MB\n"
     result_msg += "\n".join(f" - {r}" for r in results)
     return result_msg
 
 
-@sv_ann_clear_cache.on_fullmatch(("清理缓存", "删除缓存"), block=True)
+@sv_ann_clear_cache.on_fullmatch(("清理缓存", "删除缓存", "清理緩存", "刪除緩存"), block=True)
 async def clean_cache_(bot: Bot, ev: Event):
     """手动清理缓存指令"""
     days = WutheringWavesConfig.get_config("CacheDaysToKeep").data

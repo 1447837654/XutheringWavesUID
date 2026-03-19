@@ -266,8 +266,8 @@
         "need_admin": false
       },
       {
-        "name": "深塔出场率",
-        "desc": "深塔出场率",
+        "name": "深塔出場率",
+        "desc": "深塔出場率",
         "eg": "深塔出场率",
         "need_ck": false,
         "need_sk": false,
@@ -282,8 +282,8 @@
         "need_admin": false
       },
       {
-        "name": "冥歌海墟出场率",
-        "desc": "冥歌海墟出场率",
+        "name": "冥歌海墟出場率",
+        "desc": "冥歌海墟出場率",
         "eg": "冥海出场率",
         "need_ck": false,
         "need_sk": false,
@@ -591,6 +591,14 @@
         "desc": "开启每天的自动签到功能",
         "eg": "开启自动签到",
         "need_ck": true,
+        "need_sk": false,
+        "need_admin": false
+      },
+      {
+        "name": "设置语言",
+        "desc": "设置面板/体力等图片的显示语言",
+        "eg": "设置语言en",
+        "need_ck": false,
         "need_sk": false,
         "need_admin": false
       }
