@@ -93,24 +93,58 @@ def rgb_to_hex(rgb: Tuple) -> str:
     return "#{:02x}{:02x}{:02x}".format(rgb[0], rgb[1], rgb[2])
 
 
-def pil_to_b64(img: Image.Image, quality: int = 0, bake: bool = False) -> str:
+def pil_to_b64(img: Image.Image, quality: int = 0) -> str:
     """将PIL图像转换为base64编码的data URL
 
     quality=0: PNG无损（默认）
     quality>0: WebP有损压缩（保留透明通道），推荐80
-    bake: 启用烘焙缓存，适合角色立绘等内容不变的图
     """
+    buffered = BytesIO()
+    if quality > 0:
+        img.save(buffered, format="WEBP", quality=quality)
+        return "data:image/webp;base64," + base64.b64encode(buffered.getvalue()).decode('utf-8')
+    img.save(buffered, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+
+def img_to_b64(path: Union[str, Path], quality: int = 0, bake: bool = False,
+               cover_size: Optional[Tuple[int, int]] = None) -> str:
+    """文件路径 → base64 data URL，支持烘焙缓存。
+
+    quality=0: 原格式直读（最快，不经过PIL）
+    quality>0: WebP压缩
+    bake=True + quality>0: 烘焙缓存，命中时跳过PIL，直接读文件
+    cover_size: (w, h) 模拟 object-fit:cover 居中裁切到指定尺寸
+    """
+    from .resource.RESOURCE_PATH import BAKE_PATH
+
+    path = Path(path) if not isinstance(path, Path) else path
+    if not path.exists():
+        return ""
+
+    size_tag = f"_{cover_size[0]}x{cover_size[1]}" if cover_size else ""
+
+    def _apply_cover(img: Image.Image) -> Image.Image:
+        if cover_size is None:
+            return img
+        tw, th = cover_size
+        scale = max(tw / img.width, th / img.height)
+        new_w, new_h = int(img.width * scale), int(img.height * scale)
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+        left = (new_w - tw) // 2
+        top = (new_h - th) // 2
+        return img.crop((left, top, left + tw, top + th))
+
+    # 烘焙命中：直接读 bake 文件，不打开 PIL
     if bake and quality > 0:
         import hashlib
-        from .resource.RESOURCE_PATH import BAKE_PATH
-        bake_dir = BAKE_PATH / "pil"
-        bake_dir.mkdir(exist_ok=True)
-        raw = img.tobytes()
-        pixel_hash = hashlib.md5(raw).hexdigest()[:16]
-        bake_path = bake_dir / f"{pixel_hash}_{img.width}x{img.height}_q{quality}.webp"
-        if bake_path.exists():
+        path_hash = hashlib.md5(str(path.resolve()).encode()).hexdigest()[:8]
+        bake_path = BAKE_PATH / f"{path.stem}_{path_hash}_q{quality}{size_tag}.webp"
+        if bake_path.exists() and bake_path.stat().st_mtime >= path.stat().st_mtime:
             with open(bake_path, "rb") as f:
                 return "data:image/webp;base64," + base64.b64encode(f.read()).decode('utf-8')
+        # 未命中：PIL 打开 → WebP → 写入烘焙
+        img = _apply_cover(Image.open(path).convert("RGBA"))
         buffered = BytesIO()
         img.save(buffered, format="WEBP", quality=quality)
         data = buffered.getvalue()
@@ -120,12 +154,19 @@ def pil_to_b64(img: Image.Image, quality: int = 0, bake: bool = False) -> str:
             pass
         return "data:image/webp;base64," + base64.b64encode(data).decode('utf-8')
 
-    buffered = BytesIO()
+    # 不烘焙
     if quality > 0:
+        img = _apply_cover(Image.open(path).convert("RGBA"))
+        buffered = BytesIO()
         img.save(buffered, format="WEBP", quality=quality)
         return "data:image/webp;base64," + base64.b64encode(buffered.getvalue()).decode('utf-8')
-    img.save(buffered, format="PNG")
-    return "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+    # quality=0: 原格式直读（不支持 cover_size）
+    ext = path.suffix.lstrip(".").lower()
+    if ext == "jpg":
+        ext = "jpeg"
+    with open(path, "rb") as f:
+        return f"data:image/{ext};base64,{base64.b64encode(f.read()).decode('utf-8')}"
 
 
 ELEMENT_COLOR_MAP = {
@@ -295,10 +336,12 @@ async def get_role_pile_default(resource_id: Union[int, str], custom: bool = Fal
     return Image.open(path).convert("RGBA")
 
 
+def get_square_avatar_path(resource_id: Union[int, str]) -> Path:
+    return AVATAR_PATH / f"role_head_{resource_id}.png"
+
+
 async def get_square_avatar(resource_id: Union[int, str]) -> Image.Image:
-    name = f"role_head_{resource_id}.png"
-    path = AVATAR_PATH / name
-    return Image.open(path).convert("RGBA")
+    return Image.open(get_square_avatar_path(resource_id)).convert("RGBA")
 
 
 async def cropped_square_avatar(item_icon: Image.Image, size: int) -> Image.Image:
@@ -325,13 +368,15 @@ async def cropped_square_avatar(item_icon: Image.Image, size: int) -> Image.Imag
     return resized_image
 
 
+def get_square_weapon_path(resource_id: Union[int, str]) -> Path:
+    path = WEAPON_PATH / f"weapon_{resource_id}.png"
+    if path.exists():
+        return path
+    return WEAPON_PATH / "weapon_21020012.png"
+
+
 async def get_square_weapon(resource_id: Union[int, str]) -> Image.Image:
-    name = f"weapon_{resource_id}.png"
-    path = WEAPON_PATH / name
-    if os.path.exists(path):
-        return Image.open(path).convert("RGBA")
-    else:
-        return Image.open(WEAPON_PATH / "weapon_21020012.png").convert("RGBA")
+    return Image.open(get_square_weapon_path(resource_id)).convert("RGBA")
 
 
 async def get_attribute(name: str = "", is_simple: bool = False) -> Image.Image:
@@ -383,7 +428,7 @@ def get_custom_waves_bg(  # 不是所有地方都适合替换为custom，函数�
     img: Optional[Image.Image] = None
     if ShowConfig.get_config("CardBg").data:
         bg_path = Path(ShowConfig.get_config("CardBgPath").data)
-        if bg_path.exists():
+        if bg_path.is_file():
             img = Image.open(bg_path).convert("RGBA")
             if crop and img:
                 img = crop_center_img(img, w, h)
@@ -630,12 +675,31 @@ async def pic_download_from_url(
 
     name = pic_url.split("/")[-1]
     _path = path / name
+    webp_path = _path.with_suffix(".webp")
+
+    if webp_path.exists():
+        return Image.open(webp_path).convert("RGBA")
+
     if not _path.exists():
         from gsuid_core.utils.download_resource.download_file import download
 
         await download(pic_url, path, name, tag="[鸣潮]")
 
-    return Image.open(_path).convert("RGBA")
+    try:
+        img = Image.open(_path).convert("RGBA")
+    except Exception as e:
+        logger.warning(f"[鸣潮] 打开图片失败: {_path}, {e}")
+        raise
+
+    if _path != webp_path:
+        try:
+            img.save(webp_path, "WEBP", quality=85)
+            _path.unlink(missing_ok=True)
+            logger.debug(f"[鸣潮] 已将图片转为webp: {webp_path.name}")
+        except Exception as e:
+            logger.warning(f"[鸣潮] 转换webp失败: {e}")
+
+    return img
 
 
 async def get_custom_gaussian_blur(img: Image.Image) -> Image.Image:

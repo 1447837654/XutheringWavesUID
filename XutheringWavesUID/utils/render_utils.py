@@ -147,6 +147,9 @@ async def _ensure_browser():
         return _browser
 
 
+_pool_lock = asyncio.Lock()
+
+
 async def _acquire_page():
     """Get a reusable page from the pool, or create a new one."""
     global _pool_ctx, _active_renders
@@ -155,28 +158,36 @@ async def _acquire_page():
     if browser is None:
         return None, -1
 
-    gen = _pool_generation
+    async with _pool_lock:
+        gen = _pool_generation
 
-    # Try to reuse a pooled page
-    while not _page_pool.empty():
-        try:
-            page, page_gen = _page_pool.get_nowait()
-            if page_gen == gen and not page.is_closed():
-                _active_renders += 1
-                return page, gen
-            # Stale page, discard
-        except asyncio.QueueEmpty:
-            break
+        # Try to reuse a pooled page
+        while not _page_pool.empty():
+            try:
+                page, page_gen = _page_pool.get_nowait()
+                if page_gen == gen and not page.is_closed():
+                    _active_renders += 1
+                    return page, gen
+            except asyncio.QueueEmpty:
+                break
 
-    # Create shared context if needed
-    if _pool_ctx is None or _pool_ctx._impl_obj._is_closed:
-        _pool_ctx = await browser.new_context(
-            viewport={"width": 1200, "height": 1000}
-        )
+        # Create shared context if needed (rare, only first time)
+        ctx_closed = _pool_ctx is None
+        if not ctx_closed:
+            try:
+                ctx_closed = _pool_ctx._impl_obj._is_closed
+            except AttributeError:
+                # Playwright 版本不支持 _is_closed，尝试创建页面来检测
+                ctx_closed = True
+        if ctx_closed:
+            _pool_ctx = await browser.new_context(
+                viewport={"width": 1200, "height": 1000}
+            )
 
+    # Create page outside lock — allows parallel page creation
     page = await _pool_ctx.new_page()
     _active_renders += 1
-    return page, gen
+    return page, _pool_generation
 
 
 async def _release_page(page, gen: int):
@@ -212,7 +223,8 @@ async def _render_via_remote(html_content: str, remote_url: str) -> Optional[byt
             if response.status_code == 200:
                 image_data = response.content
                 elapsed_time = time.time() - start_time
-                logger.info(f"[鸣潮] 外置渲染成功，耗时: {elapsed_time:.2f}s，图片大小: {len(image_data)} bytes")
+                html_kb = len(html_content) / 1024
+                logger.info(f"[鸣潮] 外置渲染成功，耗时: {elapsed_time:.2f}s，HTML大小: {html_kb:.1f}KB，图片大小: {len(image_data)} bytes")
                 return image_data
             else:
                 logger.warning(f"[鸣潮] 外置渲染失败，状态码: {response.status_code}, 错误: {response.text}")
@@ -417,6 +429,10 @@ async def get_image_b64_with_cache(
 
         filename = url.split("/")[-1]
         local_path = cache_path / filename
+        # pic_download_from_url 会将图片转为 webp 并删除原文件
+        webp_path = local_path.with_suffix(".webp")
+        if not local_path.exists() and webp_path.exists():
+            local_path = webp_path
 
         # 不压缩也不裁切，直接返回原图
         if quality is None and cover_size is None:
@@ -427,13 +443,13 @@ async def get_image_b64_with_cache(
                 data = f.read()
             return f"data:image/{ext};base64,{base64.b64encode(data).decode('utf-8')}"
 
-        # 烘焙缓存: bake/{来源目录}/{原文件名}_{quality}_{宽x高}.webp
-        bake_dir = BAKE_PATH / cache_path.name
-        bake_dir.mkdir(exist_ok=True)
+        # 烘焙缓存: bake/{文件名}_{路径hash}_{quality}_{宽x高}.webp
+        import hashlib
+        path_hash = hashlib.md5(str(local_path.resolve()).encode()).hexdigest()[:8]
         stem = Path(filename).stem
         size_tag = f"_{cover_size[0]}x{cover_size[1]}" if cover_size else ""
-        bake_name = f"{stem}_q{quality or 80}{size_tag}.webp"
-        bake_path = bake_dir / bake_name
+        bake_name = f"{stem}_{path_hash}_q{quality or 80}{size_tag}.webp"
+        bake_path = BAKE_PATH / bake_name
 
         # 命中烘焙缓存 — 直接读文件 + base64，跳过 PIL
         if bake_path.exists() and bake_path.stat().st_mtime >= local_path.stat().st_mtime:
