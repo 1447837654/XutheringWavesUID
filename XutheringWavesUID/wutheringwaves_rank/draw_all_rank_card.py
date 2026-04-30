@@ -63,7 +63,8 @@ from ..utils.fonts.waves_fonts import (
     waves_font_40,
     waves_font_44,
 )
-from ..utils.resource.constant import ATTRIBUTE_ID_MAP, SPECIAL_CHAR_NAME
+from ..utils.resource.constant import ATTRIBUTE_ID_MAP, SPECIAL_CHAR_NAME, randomize_special_char_id
+from ..utils.imagetool import get_weapon_icon_bg
 
 TEXT_PATH = Path(__file__).parent / "texture2d"
 TITLE_I = Image.open(TEXT_PATH / "title.png")
@@ -195,7 +196,8 @@ async def draw_all_rank_card(bot: Bot, ev: Event, char: str, rank_type: str, pag
     total_score = 0
     total_damage = 0
 
-    pic = await get_square_avatar(char_id)
+    display_char_id = randomize_special_char_id(int(char_id))
+    pic = await get_square_avatar(display_char_id)
 
     pic_temp = Image.new("RGBA", pic.size)
     pic_temp.paste(pic.resize((160, 160)), (10, 10))
@@ -274,7 +276,7 @@ async def draw_all_rank_card(bot: Bot, ev: Event, char: str, rank_type: str, pag
 
         weapon_icon = await get_square_weapon(rank.weapon_id)
         weapon_icon = crop_center_img(weapon_icon, 110, 110)
-        weapon_icon_bg = get_weapon_icon_bg(weapon_model.starLevel)
+        weapon_icon_bg = get_weapon_icon_bg(weapon_model.starLevel, TEXT_PATH)
         weapon_icon_bg.paste(weapon_icon, (10, 20), weapon_icon)
 
         weapon_bg_temp_draw = ImageDraw.Draw(weapon_bg_temp)
@@ -401,14 +403,6 @@ def get_chain_name(n: int) -> str:
     return f"{['零', '一', '二', '三', '四', '五', '六'][n]}链"
 
 
-def get_weapon_icon_bg(star: int = 3) -> Image.Image:
-    if star < 3:
-        star = 3
-    bg_path = TEXT_PATH / f"weapon_icon_bg_{star}.png"
-    bg_img = Image.open(bg_path)
-    return bg_img
-
-
 def get_breach(breach: Union[int, None], level: int):
     if breach is None:
         if level <= 20:
@@ -435,6 +429,7 @@ async def get_avatar(
     qid: Optional[str],
     char_id: Union[int, str],
 ) -> Image.Image:
+    char_id = randomize_special_char_id(int(char_id))
     # 检查qid 为纯数字
     if qid and qid.isdigit():
         if WutheringWavesConfig.get_config("QQPicCache").data:

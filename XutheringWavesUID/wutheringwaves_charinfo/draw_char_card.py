@@ -103,6 +103,7 @@ from ..utils.image import (
     get_role_pile_with_path,
     get_custom_gaussian_blur,
 )
+from ..utils.imagetool import get_weapon_icon_bg
 
 TEXT_PATH = Path(__file__).parent / "texture2d"
 
@@ -323,6 +324,8 @@ async def ph_card_draw(
 
         if phantom_score > 0:
             phantom_score = round(phantom_score, 2)
+            if phantom_score > 249.9:
+                phantom_score = 250.0
             _bg = get_total_score_bg(char_name, phantom_score, calc.calc_temp)
             sh_score_bg_c = Image.open(TEXT_PATH / f"sh_score_bg_{_bg}.png")
             score_temp = Image.new("RGBA", sh_score_bg_c.size)
@@ -810,14 +813,14 @@ async def draw_char_detail_img(
 
     weapon_icon = await get_square_weapon(weaponData.weapon.weaponId)
     weapon_icon = crop_center_img(weapon_icon, 110, 110)
-    weapon_icon_bg = get_weapon_icon_bg(weaponData.weapon.weaponStarLevel)
+    weapon_icon_bg = get_weapon_icon_bg(weaponData.weapon.weaponStarLevel, TEXT_PATH)
     weapon_icon_bg.paste(weapon_icon, (10, 20), weapon_icon)
 
     weapon_bg_temp_draw = ImageDraw.Draw(weapon_bg_temp)
-    draw_text_with_fallback(weapon_bg_temp_draw, (200, 30), t(weaponData.weapon.weaponName, locale), SPECIAL_GOLD, waves_font_40, "lm")
+    _weapon_name_width = draw_text_with_fallback(weapon_bg_temp_draw, (200, 30), t(weaponData.weapon.weaponName, locale), SPECIAL_GOLD, waves_font_40, "lm")
     draw_text_with_fallback(weapon_bg_temp_draw, (203, 75), f"Lv.{weaponData.level}/90", "white", waves_font_30, "lm")
 
-    _x = 220 + 43 * len(weaponData.weapon.weaponName)
+    _x = min(int(200 + _weapon_name_width + 20), weapon_bg.width - 50)
     _y = 37
     wrc_fill = WEAPON_RESONLEVEL_COLOR[weaponData.resonLevel] + (int(0.8 * 255),)  # type: ignore
     weapon_bg_temp_draw.rounded_rectangle([_x - 15, _y - 15, _x + 50, _y + 15], radius=7, fill=wrc_fill)
@@ -879,17 +882,21 @@ async def draw_char_detail_img(
 
         name = re.sub(r'[",，]+', "", _mz.name) if _mz.name else ""
         name = t(name, locale, partial=True)
-        if locale == 'en':
-            # 英文：缩小字体，超长时换行
-            _chain_font = waves_font_12
-            if len(name) > 14:
-                mid = len(name) // 2
-                name = name[:mid] + "\n" + name[mid:]
-            draw_text_with_fallback(mz_bg_temp_draw, (147, 228), name, "white", _chain_font, "mm")
-        elif len(name) >= 8:
-            draw_text_with_fallback(mz_bg_temp_draw, (147, 230), f"{name}", "white", waves_font_16, "mm")
+        if locale == 'en' and len(name) > 14 and ' ' in name:
+            mid = len(name) // 2
+            left = name.rfind(' ', 0, mid)
+            right = name.find(' ', mid)
+            if left == -1:
+                split_pos = right
+            elif right == -1:
+                split_pos = left
+            else:
+                split_pos = left if (mid - left) <= (right - mid) else right
+            name = name[:split_pos] + "\n" + name[split_pos + 1:]
+        if len(name) >= 8:
+            draw_text_with_fallback(mz_bg_temp_draw, (147, 230), name, "white", waves_font_16, "mm")
         else:
-            draw_text_with_fallback(mz_bg_temp_draw, (147, 230), f"{name}", "white", waves_font_20, "mm")
+            draw_text_with_fallback(mz_bg_temp_draw, (147, 230), name, "white", waves_font_20, "mm")
 
         if not _mz.unlocked:
             mz_bg_temp = ImageEnhance.Brightness(mz_bg_temp).enhance(0.3)
@@ -1240,6 +1247,8 @@ async def draw_char_score_img(ev: Event, uid: str, char: str, user_id: str, wave
 
         if phantom_score > 0:
             phantom_score = round(phantom_score, 2)
+            if phantom_score > 249.9:
+                phantom_score = 250.0
             _bg = get_total_score_bg(char_name, phantom_score, calc.calc_temp)
             sh_score_bg_c = Image.open(TEXT_PATH / f"sh_score_bg_{_bg}.png")
             score_temp = Image.new("RGBA", sh_score_bg_c.size)
@@ -1428,14 +1437,6 @@ async def draw_char_with_ring(char_id):
     img.paste(resize_pic, (20, 20), mask)
 
     return img
-
-
-def get_weapon_icon_bg(star: int = 3) -> Image.Image:
-    if star < 3:
-        star = 3
-    bg_path = TEXT_PATH / f"weapon_icon_bg_{star}.png"
-    bg_img = Image.open(bg_path)
-    return bg_img
 
 
 async def generate_online_role_detail(char_id: str):

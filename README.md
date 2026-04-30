@@ -33,7 +33,7 @@ git clone https://github.com/Loping151/XutheringWavesUID.git
 群友的拓展教程：
 https://blog.ovoii.io/posts/notes/wwbot 
 
-总排行申请、反馈（仅限主人）：群号 387393347（需中转一次，因为被炸过群了）。如完全不使用QQ平台，可发邮件给客服小维 agent@loping151.com（记得写标题）申请计算服务token，要求附带具体使用平台、core信息截图和使用情况和规模说明，支持较少的请求量和用户量，但完全足以小范围使用，一般都欢迎入群。
+总排行申请、反馈（仅限主人）：群号 387393347（需中转一次，因为被炸过群了，这是一个悲伤的故事）。如**完全**不使用QQ平台（如飞书、Discord等），可发邮件给客服小维 agent@loping151.com（记得写标题避免被小维当成垃圾邮件）申请计算token，要求附带具体使用平台、core信息截图和使用情况和规模说明，支持较少的请求量和用户量，但完全足以小范围使用，一般都欢迎入群。
 
 - 为什么需要申请总排行进行使用：
   
@@ -45,9 +45,7 @@ https://blog.ovoii.io/posts/notes/wwbot
 
 - 除了总排行，插件本体功能是否有其他内容需要申请：
 
-    无。评分功能由于是独立的服务，与插件本体无关。
-
-    <img src="./assets/4.png" alt="需要申请的另一个原因：" width="300" />
+    无。评分功能由于是独立的服务，需额外计算资源，与插件本体无关。
 
 ## 丨拓展
 
@@ -72,15 +70,21 @@ https://blog.ovoii.io/posts/notes/wwbot
 >
 > **建议安装以下额外依赖：**
 > - `playwright`：用于渲染公告、wiki图等功能。安装后还需执行 `uv run playwright install chromium`
-> - `opencv-python`：用于面板图重复判断、提取面板图、相似度识别等功能
+> - `opencv-python`：用于面板图重复判断、提取面板图、相似度识别、矩阵显示共鸣链等功能
 > - `fonttools`：用于多语言字体 fallback，未安装时日韩文可能显示为方框
+> - `pypinyin`：用于模糊建议（含打错字、顺序颠倒等容错）
 >
 > ```bash
 > # Linux/Mac
-> source .venv/bin/activate && uv pip install playwright opencv-python fonttools && uv run playwright install chromium
+> source .venv/bin/activate && uv pip install playwright opencv-python fonttools pypinyin && uv run playwright install chromium
 > # Windows
-> .venv\Scripts\activate; uv pip install playwright opencv-python fonttools; uv run playwright install chromium
+> .venv\Scripts\activate; uv pip install playwright opencv-python fonttools pypinyin; uv run playwright install chromium
 > ```
+>
+> **如有条件，建议为系统补充以下字体，避免官方公告使用特殊字符时渲染异常：**
+> - emoji 字体：如 `Noto Color Emoji`、`Apple Color Emoji`、`Segoe UI Emoji`
+> - 颜文字 / 符号字体：如 `Symbola`、`Noto Sans Symbols2`
+> - 汉字字体：如 `Noto Sans CJK SC/TC/JP/KR`、`Source Han Sans` 等覆盖中日韩的字体
 
 ## 丨其他
 
@@ -92,11 +96,7 @@ https://blog.ovoii.io/posts/notes/wwbot
 
 + [GPL-3.0 License](https://github.com/Loping151/XutheringWavesUID/blob/main/LICENSE)
 
-本仓库仅允许正常、可沟通、具有良知的个体部署： https://ngabbs.com/read.php?tid=45654606 以下bot行为造成的任何影响与本仓库及开发者无关。
-
-<img src="./assets/1.png" alt="😅" width="200" />
-<img src="./assets/2.png" alt="😅" width="200" />
-<img src="./assets/3.png" alt="😅" width="200" />
+本仓库仅允许正常、可沟通、具有良知的个体部署，原因：https://ngabbs.com/read.php?tid=45654606 以及：[link](./assets/0428.md)。
 
 ## 支持设备列表：
 win_amd64: python3.10-3.13<br>
@@ -125,3 +125,6 @@ android_termux: python3.10-3.13<br>
   - [小羊早睡不遭罪](https://space.bilibili.com/37331716)
   - [吃我无痕](https://space.bilibili.com/347744)
   - [巡游天国FM](https://space.bilibili.com/444694026)
+ 
+  
+<img src="./assets/footer.png" alt="footer" width="1000" />

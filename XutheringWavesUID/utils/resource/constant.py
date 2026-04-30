@@ -8,6 +8,9 @@ NORMAL_LIST = [
     "漂泊者·衍射",
     "漂泊者·湮灭",
     "漂泊者·气动",
+    "漂泊者·热熔",
+    "漂泊者·冷凝",
+    "漂泊者·导电",
     "千古洑流",
     "停驻之烟",
     "擎渊怒涛",
@@ -72,6 +75,14 @@ SPECIAL_CHAR_INT = {
 }
 
 SPECIAL_CHAR_INT_ALL = [1501, 1502, 1604, 1605, 1406, 1408]
+
+def randomize_special_char_id(char_id: int) -> int:
+    """排行展示时随机将特殊角色替换为配对形态，保护用户隐私/公平性"""
+    import random
+    if char_id in SPECIAL_CHAR_INT:
+        return random.choice(SPECIAL_CHAR_INT[char_id])
+    return char_id
+
 
 SPECIAL_CHAR_NAME = {
     "1501": "光主",
@@ -138,10 +149,18 @@ SONATA_FIRST_ID = {
     "流金溯真之式": [6000179],
     "长路启航之星": [6000191],
     "听唤语义之愿": [6000192],
+    "剪心辑梦之影": [6000198],
+    "雪落无声之愿": [6000199],
+    "斑驳粉饰之沫": [6000200],
 }
 
 
-SHORT_NAME = {6000106: "芙露德莉斯", 6000167: "利维亚坦"}
+SHORT_NAME = {
+    6000106: "芙露德莉斯",
+    6000167: "利维亚坦",
+    6000199: "虚造神型",
+    6000200: "达妮娅·骗术师",
+}
 
 
 def get_short_name(sonata_id: int, sonata_name: str) -> str:

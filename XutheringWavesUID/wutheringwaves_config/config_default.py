@@ -42,6 +42,7 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
             "小沐XMu",
             "吃我无痕",
             "巡游天国FM",
+            "社区攻略",
         ],
     ),
     "WavesGuideMaxSize": GsIntConfig(
@@ -200,7 +201,7 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
     "RefreshSingleCharBehavior": GsStrConfig(
         "刷新单角色面板逻辑",
         "控制刷新单个角色面板后的行为：refresh_only(仅刷新)、refresh_and_send(刷新并合并发送)、refresh_and_send_separately(刷新并分别发送)、concatenate(拼接为一张图发送)",
-        "refresh_and_send",
+        "concatenate",
         options=[
             "refresh_only",
             "refresh_and_send",
@@ -223,7 +224,7 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
     "CacheDaysToKeep": GsIntConfig(
         "保留缓存公告、日历资源天数",
         "自动删除创建时间早于此天数的公告和日历图片缓存，每次启动和每天定时执行",
-        42,
+        45,
         3650,
     ),
     "RankActiveFilterGroup": GsBoolConfig(
