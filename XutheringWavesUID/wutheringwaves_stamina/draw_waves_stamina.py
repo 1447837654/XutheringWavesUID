@@ -1,6 +1,7 @@
 import time
+import random
 import asyncio
-from typing import Dict
+from typing import Dict, Optional
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -18,22 +19,33 @@ from ..utils.image import (
     GREY,
     GREEN,
     YELLOW,
-    add_footer, 
-    pil_to_b64, 
+    _force_bg_path,
+    _force_pile_path,
+    add_footer,
+    pil_to_b64,
+    draw_text_with_shadow,
     get_event_avatar,
     get_random_waves_bg,
     get_random_waves_role_pile,
 )
 from ..utils.api.model import DailyData, AccountBaseInfo
+from ..utils.api.launcher_chain import fetch_launcher_panel
+from ..utils.util import hide_uid
 from ..utils.constants import WAVES_GAME_ID
 from ..utils.at_help import ruser_id
 from ..utils.waves_api import waves_api
 from ..utils.error_reply import ERROR_CODE, WAVES_CODE_102, WAVES_CODE_103
 from ..utils.name_convert import char_name_to_char_id
-from ..utils.database.models import WavesBind, WavesUser, WavesStaminaRecord, WavesLangSettings
+from ..utils.database.models import (
+    WavesBind,
+    WavesUser,
+    WavesStaminaRecord,
+    WavesLangSettings,
+)
 from ..utils.localization import t
 from ..utils.api.request_util import KuroApiResp
 from ..utils.fonts.waves_fonts import (
+    waves_font_12,
     waves_font_18,
     waves_font_24,
     waves_font_25,
@@ -43,6 +55,8 @@ from ..utils.fonts.waves_fonts import (
     waves_font_42,
 )
 from ..utils.resource.constant import SPECIAL_CHAR
+from ..wutheringwaves_charinfo import card_hash_index
+from ..wutheringwaves_charinfo.card_hash_index import compute_hash as _compute_pile_hash, detect_type as _detect_pile_type
 from ..wutheringwaves_config.wutheringwaves_config import ShowConfig, WutheringWavesConfig
 import io
 import base64
@@ -69,6 +83,9 @@ async def seconds2hours(seconds: int) -> str:
 
 
 async def process_uid(uid, ev):
+    if waves_api.is_net(uid):
+        return await _process_uid_launcher(uid, ev)
+
     ck = await waves_api.get_self_waves_ck(uid, ruser_id(ev), ev.bot_id)
     if not ck:
         try:
@@ -120,6 +137,61 @@ async def process_uid(uid, ev):
     }
 
 
+async def _process_uid_launcher(uid, ev):
+    user_id = ruser_id(ev)
+    bot_id = ev.bot_id
+
+    panel = await fetch_launcher_panel(user_id, bot_id, uid)
+    if panel is None:
+        logger.info(
+            f"[鸣潮][每日信息]国际服账号失效，无法拉取面板 uid={uid} user_id={user_id} bot_id={bot_id}"
+        )
+        try:
+            await WavesStaminaRecord.update_ck_valid(
+                user_id=user_id,
+                bot_id=bot_id,
+                bot_self_id=ev.bot_self_id or "",
+                uid=uid,
+                is_ck_valid=False,
+            )
+        except Exception:
+            logger.exception("[鸣潮][每日信息]launcher CK 状态更新失败")
+        return None
+
+    base = panel.base
+    daily_info = DailyData(
+        gameId=WAVES_GAME_ID,
+        userId=0,
+        serverId="",
+        roleId=str(uid),
+        roleName=base.name,
+        signInTxt="",
+        hasSignIn=False,
+        energyData=panel.energy,
+        livenessData=panel.liveness,
+        battlePassData=[panel.battlePass],
+    )
+
+    try:
+        await WavesStaminaRecord.upsert_stamina_query(
+            user_id=user_id,
+            bot_id=bot_id,
+            bot_self_id=ev.bot_self_id or "",
+            uid=uid,
+            mr_query_time=int(time.time()),
+            mr_value=panel.energy.cur if panel.energy else None,
+            is_ck_valid=True,
+        )
+    except Exception:
+        logger.exception("[鸣潮][每日信息]launcher 体力记录写入失败")
+
+    return {
+        "daily_info": daily_info,
+        "account_info": base,
+        "from_sdk": True,
+    }
+
+
 async def draw_stamina_img(bot: Bot, ev: Event):
     try:
         uid_list = await WavesBind.get_uid_list_by_game(ruser_id(ev), ev.bot_id)
@@ -165,6 +237,7 @@ async def _draw_stamina_img(ev: Event, valid: Dict, locale: str = "") -> Image.I
     """准备数据并调用绘制函数"""
     daily_info: DailyData = valid["daily_info"]
     account_info: AccountBaseInfo = valid["account_info"]
+    from_sdk: bool = bool(valid.get("from_sdk", False))
 
     # 确定签到状态
     if daily_info.hasSignIn:
@@ -197,6 +270,8 @@ async def _draw_stamina_img(ev: Event, valid: Dict, locale: str = "") -> Image.I
     force_use_bg = False
     force_not_use_bg = False
     force_not_use_custom = False
+    pinned_path: Optional[Path] = None
+    pinned_type: Optional[str] = None
 
     if user and user.stamina_bg_value:
         logger.debug(f"[鸣潮][每日信息]使用自定义体力背景设置: {user.stamina_bg_value}")
@@ -206,39 +281,92 @@ async def _draw_stamina_img(ev: Event, valid: Dict, locale: str = "") -> Image.I
         stamina_bg_value = (
             user.stamina_bg_value.replace("背景", "").replace("立绘", "").replace("官方", "").replace("图", "").strip()
         )
-        char_id = char_name_to_char_id(stamina_bg_value)
-        if char_id in SPECIAL_CHAR:
-            ck = await waves_api.get_self_waves_ck(daily_info.roleId, ruser_id(ev), ev.bot_id)
-            if ck:
-                for char_id in SPECIAL_CHAR[char_id]:
-                    role_detail_info = await waves_api.get_role_detail_info(char_id, daily_info.roleId, ck)
-                    if not role_detail_info.success:
-                        continue
-                    role_detail_info = role_detail_info.data
-                    if (
-                        not isinstance(role_detail_info, Dict)
-                        or "role" not in role_detail_info
-                        or role_detail_info["role"] is None
-                        or "level" not in role_detail_info
-                        or role_detail_info["level"] is None
-                    ):
-                        continue
-                    pile_id = char_id
-                    break
+
+        # hash 优先于角色名: modifier 既用作渲染分支选择, 也用作类型过滤,
+        # "立绘abc12345" 命中失败时不会再尝试其它类型 — 用户写死了 stamina 就不该跑 bg。
+        if force_use_bg and not force_not_use_bg:
+            allowed_hash_types = ("bg",)
+        elif force_not_use_bg and not force_use_bg:
+            allowed_hash_types = ("stamina",)
         else:
-            pile_id = char_id
+            allowed_hash_types = ("bg", "stamina")
+        hash_match = next(
+            (m for m in card_hash_index.find(stamina_bg_value) if m[0] in allowed_hash_types),
+            None,
+        )
+
+        if hash_match:
+            pinned_type, h_ch_id, pinned_path = hash_match
+            pile_id = h_ch_id
+            # 锁渲染分支与 ContextVar 一致, 否则 MrUseBG 兜底分支会跑到不匹配的 fetcher
+            force_use_bg = pinned_type == "bg"
+            force_not_use_bg = pinned_type == "stamina"
+            # hash 指向自定义图; 与 '官方' 矛盾, 后者会让 fetcher 跳过 custom_dir 而吃不到强制路径
+            if force_not_use_custom:
+                logger.debug(f"[鸣潮][每日信息]hash {stamina_bg_value} 与 '官方' 矛盾, 忽略 '官方'")
+            force_not_use_custom = False
+        else:
+            char_id = char_name_to_char_id(stamina_bg_value)
+            if char_id in SPECIAL_CHAR:
+                variants = SPECIAL_CHAR[char_id]
+                # 国际服走 SDK 路径，没有可用 ck 校验角色拥有情况，直接跳过校验逻辑
+                if not from_sdk:
+                    ck = await waves_api.get_self_waves_ck(daily_info.roleId, ruser_id(ev), ev.bot_id)
+                    if ck:
+                        for vid in variants:
+                            role_detail_info = await waves_api.get_role_detail_info(vid, daily_info.roleId, ck)
+                            if not role_detail_info.success:
+                                continue
+                            role_detail_info = role_detail_info.data
+                            if (
+                                not isinstance(role_detail_info, Dict)
+                                or "role" not in role_detail_info
+                                or role_detail_info["role"] is None
+                                or "level" not in role_detail_info
+                                or role_detail_info["level"] is None
+                            ):
+                                continue
+                            pile_id = vid
+                            break
+                if pile_id is None:
+                    # 国际服 / 无 ck / 所有变体校验均失败，退化为随机选一个变体
+                    pile_id = random.choice(variants)
+            else:
+                pile_id = char_id
 
     logger.debug(f"[鸣潮][每日信息]使用立绘ID: {pile_id}, 强制使用背景: {force_use_bg}, 强制不使用背景: {force_not_use_bg}")
-    if force_use_bg:
-        pile, has_bg = await get_random_waves_bg(pile_id, force_not_use_custom=force_not_use_custom)
-    elif force_not_use_bg:
-        pile = await get_random_waves_role_pile(pile_id, force_not_use_custom=force_not_use_custom)
-        has_bg = False
-    elif ShowConfig.get_config("MrUseBG").data:
-        pile, has_bg = await get_random_waves_bg(pile_id, force_not_use_custom=force_not_use_custom)
-    else:
-        pile = await get_random_waves_role_pile(pile_id, force_not_use_custom=force_not_use_custom)
-        has_bg = False
+
+    # 命中 hash 时短路 fetcher: 找不到对应文件 / 外部已设强制路径就静默回退到默认随机选图。
+    # type 与对应 ContextVar 是 1:1 映射, 不再展开成两套 token。
+    _pin_var = {"bg": _force_bg_path, "stamina": _force_pile_path}.get(pinned_type or "")
+    _pin_token = None
+    if (
+        _pin_var is not None
+        and pinned_path is not None
+        and pinned_path.is_file()
+        and _pin_var.get() is None
+    ):
+        _pin_token = _pin_var.set(pinned_path)
+    try:
+        if force_use_bg:
+            pile, has_bg, pile_path = await get_random_waves_bg(pile_id, force_not_use_custom=force_not_use_custom)
+        elif force_not_use_bg:
+            pile, pile_path = await get_random_waves_role_pile(pile_id, force_not_use_custom=force_not_use_custom)
+            has_bg = False
+        elif ShowConfig.get_config("MrUseBG").data:
+            pile, has_bg, pile_path = await get_random_waves_bg(pile_id, force_not_use_custom=force_not_use_custom)
+        else:
+            pile, pile_path = await get_random_waves_role_pile(pile_id, force_not_use_custom=force_not_use_custom)
+            has_bg = False
+    finally:
+        if _pin_token is not None and _pin_var is not None:
+            _pin_var.reset(_pin_token)
+
+    # 仅自定义图绘制 hash; 官方图 detect_type 返回 None 不画。
+    # 用户已通过 hash 指定体力背景时角落 hash 是冗余信息, 跳过绘制。
+    pile_hash: Optional[str] = None
+    if pinned_type is None and pile_path is not None and _detect_pile_type(pile_path) is not None:
+        pile_hash = _compute_pile_hash(pile_path.name)
 
     # 尝试使用HTML渲染
     use_html_render = WutheringWavesConfig.get_config("UseHtmlRender").data
@@ -260,6 +388,7 @@ async def _draw_stamina_img(ev: Event, valid: Dict, locale: str = "") -> Image.I
             active_text=active_text,
             mr_use_bg=mr_use_bg,
             locale=locale,
+            pile_hash=pile_hash,
         )
 
     try:
@@ -278,6 +407,8 @@ async def _draw_stamina_img(ev: Event, valid: Dict, locale: str = "") -> Image.I
             active_text=active_text,
             avatar=avatar,
             locale=locale,
+            from_sdk=from_sdk,
+            pile_hash=pile_hash,
         )
         if html_res:
             return html_res
@@ -302,6 +433,7 @@ async def _draw_stamina_img(ev: Event, valid: Dict, locale: str = "") -> Image.I
         active_text=active_text,
         mr_use_bg=mr_use_bg,
         locale=locale,
+        pile_hash=pile_hash,
     )
 
 
@@ -317,6 +449,8 @@ async def _render_stamina_card(
     active_text: str,
     avatar: Image.Image,
     locale: str = "",
+    from_sdk: bool = False,
+    pile_hash: Optional[str] = None,
 ) -> Image.Image:
     # 准备上下文数据
     
@@ -383,7 +517,7 @@ async def _render_stamina_card(
         is_stamina_urgent = True
 
     # 结晶
-    store_cur = account_info.storeEnergy
+    store_cur = account_info.storeEnergy or 0
     store_total = account_info.storeEnergyLimit if account_info.storeEnergyLimit else 480
     store_percent = min(100, (store_cur / store_total * 100)) if store_total else 0
     store_color = color_red if store_percent > 80 else color_yellow
@@ -437,15 +571,24 @@ async def _render_stamina_card(
          slash_time_text = t("已结束", locale)
 
     # 我去，我真变态！
+    show_sign_in = not from_sdk
+    show_rogue = account_info.rougeScore is not None or account_info.rougeScoreLimit is not None
+    show_tower = tower_data is not None
+    show_slash_tower = slash_data is not None
+
     context = {
         "locale": locale,
         "user_name": daily_info.roleName,
         "role_id": daily_info.roleId,
-        "uid": daily_info.roleId,
+        "uid": hide_uid(daily_info.roleId),
         "avatar_url": pil_to_b64(avatar, quality=75),
         "pile_url": compress_and_b64(pile),
         "has_bg": has_bg,
-        
+        "show_sign_in": show_sign_in,
+        "show_rogue": show_rogue,
+        "show_tower": show_tower,
+        "show_slash_tower": show_slash_tower,
+
         # Icons
         "yes_icon_url": yes_icon_b64,
         "no_icon_url": no_icon_b64,
@@ -508,6 +651,9 @@ async def _render_stamina_card(
         },
         "urgent_color": URGENT_COLOR,
 
+        # 自定义图 hash 标记 (None 时模板不渲染)
+        "pile_hash": pile_hash,
+
         # 本地化标签
         "label_daily_status": t("每日状态", locale),
         "label_recovery_time": t("回满时间：", locale),
@@ -543,6 +689,7 @@ async def _render_stamina_card_pil(
     active_text: str,
     mr_use_bg: bool = False,
     locale: str = "",
+    pile_hash: Optional[str] = None,
 ) -> Image.Image:
     """实际的绘制逻辑"""
     # 处理背景图片
@@ -563,7 +710,7 @@ async def _render_stamina_card_pil(
 
     base_info_draw = ImageDraw.Draw(base_info_bg)
     base_info_draw.text((275, 120), f"{daily_info.roleName[:7]}", GREY, waves_font_30, "lm")
-    base_info_draw.text((226, 173), f"{t('特征码:', locale)}  {daily_info.roleId}", GOLD, waves_font_25, "lm")
+    base_info_draw.text((226, 173), f"{t('特征码:', locale)}  {hide_uid(daily_info.roleId)}", GOLD, waves_font_25, "lm")
     # 账号基本信息，由于可能会没有，放在一起
 
     title_bar = Image.open(TEXT_PATH / "title_bar.png")
@@ -716,6 +863,12 @@ async def _render_stamina_card_pil(
     # account_info 放背景上
     img.paste(title_bar, (190, 620), title_bar)
     img = add_footer(img, 600, 25)
+
+    if pile_hash:
+        ImageDraw.Draw(img).text(
+            (1140, 837), pile_hash,
+            fill=(255, 255, 255, 80), font=waves_font_12, anchor="rb",
+        )
     return img
 
 

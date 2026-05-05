@@ -63,7 +63,7 @@ async def send_waves_wiki(bot: Bot, ev: Event):
                 continue
             from ..wutheringwaves_config import PREFIX
             cmd = f"{PREFIX}{cand_name}{query_role_type}"
-            msg = f"[鸣潮] 你可能想输入【{cmd}】, 已按该指令执行:"
+            msg = f"[鸣潮] 你可能想查询【{cmd}】，已执行该指令"
             return await bot.send([msg, MessageSegment.image(cand_img)], at_sender=at_sender)
 
         if suggestions:
@@ -99,7 +99,7 @@ async def send_waves_wiki(bot: Bot, ev: Event):
                 continue
             from ..wutheringwaves_config import PREFIX
             cmd = f"{PREFIX}{cand_name}介绍"
-            msg = f"[鸣潮] 你可能想输入【{cmd}】, 已按该指令执行:"
+            msg = f"[鸣潮] 你可能想查询【{cmd}】，已执行该指令"
             return await bot.send([msg, MessageSegment.image(cand_img)], at_sender=at_sender)
 
         if suggestions:
@@ -119,7 +119,7 @@ async def send_role_guide_pic(bot: Bot, ev: Event):
     await get_guide(bot, ev, char_name)
 
 
-@sv_waves_guide.on_regex(rf"^(?P<type>{PATTERN})?(?:(?:武器)?列表|武器|wq(?:lb)?)$", block=True)
+@sv_waves_guide.on_regex(r"^(?:(?P<type>长刃|迅刀|讯刀|佩枪|臂铠|臂甲|音感仪)(?:武器(?:列表)?|列表|wq(?:lb)?)|武器(?:列表)?|wq(?:lb)?)$", block=True)
 async def send_weapon_list(bot: Bot, ev: Event):
     weapon_type = ev.regex_dict.get("type", "")
     img = await draw_weapon_list(weapon_type)

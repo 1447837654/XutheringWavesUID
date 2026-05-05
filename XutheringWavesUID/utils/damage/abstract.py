@@ -1,10 +1,27 @@
+import sys
+import types
 from typing import List, Union, Optional
+
+from gsuid_core.logger import logger
 
 from ...utils.damage.damage import DamageAttribute
 
+# 跨命名空间共享: 锚定到 sys.modules 防止 abstract.py 在新命名空间重 exec 时
+# 五个 Register 子类拿到全新空 dict。
+_STATE_KEY = "__waves_register_state__"
+_state = sys.modules.get(_STATE_KEY)
+if _state is None:
+    _state = types.SimpleNamespace(maps={})
+    sys.modules[_STATE_KEY] = _state  # type: ignore[assignment]
+_REGISTRY = _state.maps
+
+
+def _shared_map(cls_name):
+    return _REGISTRY.setdefault(cls_name, {})
+
 
 class WavesRegister(object):
-    _id_cls_map = {}
+    _id_cls_map = _shared_map("WavesRegister")
 
     @classmethod
     def find_class(cls, _id):
@@ -12,30 +29,31 @@ class WavesRegister(object):
 
     @classmethod
     def register_class(cls, _id, _clz):
-        # old_cls = cls.find_class(_id)
-        # if old_cls:
-        #     raise TypeError('%s already register %s for type %s' % (cls, old_cls, _id))
+        if _clz is None:
+            return
+        if isinstance(_clz, (list, dict)) and not _clz:
+            return
         cls._id_cls_map[_id] = _clz
 
 
 class WavesWeaponRegister(WavesRegister):
-    _id_cls_map = {}
+    _id_cls_map = _shared_map("WavesWeaponRegister")
 
 
 class WavesEchoRegister(WavesRegister):
-    _id_cls_map = {}
+    _id_cls_map = _shared_map("WavesEchoRegister")
 
 
 class WavesCharRegister(WavesRegister):
-    _id_cls_map = {}
+    _id_cls_map = _shared_map("WavesCharRegister")
 
 
 class DamageDetailRegister(WavesRegister):
-    _id_cls_map = {}
+    _id_cls_map = _shared_map("DamageDetailRegister")
 
 
 class DamageRankRegister(WavesRegister):
-    _id_cls_map = {}
+    _id_cls_map = _shared_map("DamageRankRegister")
 
 
 class WeaponAbstract(object):

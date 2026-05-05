@@ -56,6 +56,14 @@
         "need_admin": false
       },
       {
+        "name": "国际服登录",
+        "desc": "国际服账号通过邮箱密码登录",
+        "eg": "邮箱登录",
+        "need_ck": false,
+        "need_sk": false,
+        "need_admin": false
+      },
+      {
         "name": "添加token",
         "desc": "绑定自己的库街区添加token",
         "eg": "添加token tk,did",
@@ -422,7 +430,7 @@
       {
         "name": "抽卡记录",
         "desc": "查询自己的抽卡记录",
-        "eg": "抽卡记录",
+        "eg": "抽卡页面/抽卡记录",
         "need_ck": true,
         "need_sk": false,
         "need_admin": false
@@ -459,15 +467,15 @@
       {
         "name": "上传角色面板图",
         "desc": "上传角色面板图",
-        "eg": "上传椿面板图",
+        "eg": "上传椿面板/背景图",
         "need_ck": false,
         "need_sk": false,
         "need_admin": true
       },
       {
-        "name": "查看角色面板图",
+        "name": "查看角色面板/背景图",
         "desc": "查看角色面板图",
-        "eg": "查看椿面板图abcdefgh",
+        "eg": "提取面板图+[面板图]",
         "need_ck": false,
         "need_sk": false,
         "need_admin": false
@@ -605,7 +613,15 @@
       {
         "name": "设置体力背景",
         "desc": "设置体力背景",
-        "eg": "设置体力背景长离",
+        "eg": "设置体力背景长离/a1b2c3d4",
+        "need_ck": false,
+        "need_sk": false,
+        "need_admin": false
+      },
+      {
+        "name": "设置角色面板图",
+        "desc": "设置角色面板图",
+        "eg": "设置长离面板图a1b2c3d4",
         "need_ck": false,
         "need_sk": false,
         "need_admin": false
@@ -746,6 +762,14 @@
         "name": "压缩面板图",
         "desc": "压缩面板图",
         "eg": "压缩面板图",
+        "need_ck": false,
+        "need_sk": false,
+        "need_admin": true
+      },
+      {
+        "name": "重新计算特征",
+        "desc": "重新计算所有面板/背景/体力图的ORB特征缓存，自动清理无对应图片的孤儿缓存",
+        "eg": "重新计算特征",
         "need_ck": false,
         "need_sk": false,
         "need_admin": true

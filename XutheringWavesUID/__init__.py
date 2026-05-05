@@ -6,17 +6,21 @@ import asyncio
 import shutil
 from pathlib import Path
 
-from gsuid_core.sv import Plugins
+from gsuid_core.sv import SL, Plugins
 from gsuid_core.logger import logger
 from gsuid_core.server import on_core_shutdown
 from gsuid_core.data_store import get_res_path
 
-Plugins(name="XutheringWavesUID", force_prefix=["ww"], allow_empty_prefix=False)
+# 幂等: 防止跨插件 cross-import 让本文件在新 namespace 下重 exec 时
+# 把 disable_force_prefix 用默认值 False 覆盖掉。
+if "XutheringWavesUID" not in SL.plugins:
+    Plugins(name="XutheringWavesUID", force_prefix=["ww"], allow_empty_prefix=False)
 
 # 安装 Bot 消息发送 Hook
 from .utils.bot_send_hook import install_bot_hooks
 from .utils.database.waves_subscribe import WavesSubscribe
 from .utils.database.waves_user_activity import WavesUserActivity
+from .utils.database.waves_user_sdk import WavesUserSdk  # noqa: F401
 from .utils.plugin_checker import is_from_waves_plugin
 
 # ===== 活跃度批量写入缓冲 =====
@@ -113,6 +117,23 @@ logger.debug("[XutheringWavesUID] 用户活跃度 hook 已注册")
 from .utils.localization import init_localization
 init_localization()
 
+# 构建自定义图 hash 索引 (面板/背景/体力), 用于 hash → 路径 O(1) 查询。
+try:
+    from .wutheringwaves_charinfo.card_hash_index import build as _build_card_hash_index
+    _build_card_hash_index()
+except Exception as _e:
+    logger.warning(f"[XutheringWavesUID] 自定义图 hash 索引构建失败: {_e}")
+
+
+# 迁移: 删除旧的 login_cache.db (已重命名为 url_cache.db)
+from .utils.resource.RESOURCE_PATH import MAIN_PATH as _MAIN_PATH
+_old_login_cache = _MAIN_PATH / "login_cache.db"
+if _old_login_cache.exists():
+    try:
+        _old_login_cache.unlink()
+        logger.info("[XutheringWavesUID] 已删除旧的 login_cache.db")
+    except Exception as _e:
+        logger.warning(f"[XutheringWavesUID] 删除旧的 login_cache.db 失败: {_e}")
 
 # 修正: API曾错误地将陆·赫斯的resourceType标记为武器
 import json as _json

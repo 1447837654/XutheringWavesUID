@@ -118,6 +118,8 @@ class WavesApi:
             self._sessions[key] = session
             return session
 
+    # 与 utils.at_help.is_intl_uid 同一判定 (>=2e8 即国际服),
+    # 区别仅在于这里是类方法、那边是模块级函数; 改动需保持两处一致。
     def is_net(self, roleId):
         _temp = int(roleId)
         return _temp >= 200000000
@@ -188,6 +190,12 @@ class WavesApi:
         if not waves_user or not waves_user.cookie:
             return ""
 
+        # 国际服账号走 launcher SDK auto_token，cookie 不是 kurobbs JWT，
+        # 不能跑 login_log，否则会被错误地标记 status="无效"。SDK 链路自行处理凭据。
+        # is_login=True 不能用作判别（kurobbs 登录流也会写 is_login=True）。
+        if self.is_net(uid):
+            return ""
+
         if waves_user.status == "无效":
             return ""
 
@@ -225,6 +233,9 @@ class WavesApi:
         ck_list = []
         times = 1
         for user in user_list:
+            if self.is_net(user.uid):
+                # 国际服账号 cookie 是 launcher auto_token，作为 kurobbs JWT 用必失败
+                continue
             if not await WavesUser.cookie_validate(user.uid):
                 continue
 

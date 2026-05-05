@@ -1,6 +1,5 @@
 import re
 import copy
-import hashlib
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -17,6 +16,9 @@ from ..utils.database.models import WavesLangSettings
 from ..utils.waves_api import waves_api
 from ..wutheringwaves_config import PREFIX
 from ..utils.error_reply import WAVES_CODE_102
+from ..utils import panel_card_pref
+from .card_hash_index import compute_hash, lookup_in_pair as _hash_lookup_in_pair
+from .card_utils import resize_and_center_image
 from .role_info_change import change_role_detail
 from ..utils.ascension.char import get_char_model
 from ..utils.api.model_other import EnemyDetailData
@@ -87,6 +89,7 @@ from ..utils.image import (
     WAVES_FREEZING,
     WAVES_SHUXING_MAP,
     WEAPON_RESONLEVEL_COLOR,
+    _force_pile_path,
     add_footer,
     change_color,
     get_waves_bg,
@@ -250,6 +253,8 @@ async def ph_card_draw(
             if _phantom and _phantom.phantomProp:
                 props = _phantom.get_props()
                 _score, _bg = calc_phantom_score(role_detail.role.roleId, props, _phantom.cost, calc.calc_temp)
+                if _score > 49.95:
+                    _score = 50.0
 
                 phantom_score += _score
                 sh_title = Image.open(TEXT_PATH / f"sh_title_{_bg}.png")
@@ -478,7 +483,7 @@ async def get_role_need(
     return avatar, role_detail
 
 
-async def draw_fixed_img(img, avatar, account_info, role_detail, locale=""):
+async def draw_fixed_img(img, avatar, account_info, role_detail, locale="", uid=None, char_name=None):
     # 头像部分
     avatar_ring = Image.open(TEXT_PATH / "avatar_ring.png")
 
@@ -488,7 +493,7 @@ async def draw_fixed_img(img, avatar, account_info, role_detail, locale=""):
 
     base_info_bg = Image.open(TEXT_PATH / "base_info_bg.png")
     base_info_draw = ImageDraw.Draw(base_info_bg)
-    draw_text_with_fallback(base_info_draw, (275, 120), f"{account_info.name[:7]}", "white", waves_font_30, "lm")
+    draw_text_with_fallback(base_info_draw, (275, 120), f"{account_info.name[:10]}", "white", waves_font_30, "lm")
     draw_text_with_fallback(base_info_draw, (226, 173), f"{t('特征码:', locale)}  {account_info.id}", GOLD, waves_font_25, "lm")
     img.paste(base_info_bg, (35, -30), base_info_bg)
 
@@ -507,7 +512,27 @@ async def draw_fixed_img(img, avatar, account_info, role_detail, locale=""):
         img.paste(title_bar, (200, 15), title_bar)
 
     # 左侧pile部分
-    is_custom, role_pile, role_pile_path = await get_role_pile_with_path(role_detail.role.roleId, True)
+    # 应用用户对该角色的面板图绑定: 仅在外部未强制 (面板编辑器预览路径) 时生效;
+    # hash 不存在 / 文件不在就不强制, 落回默认随机选图。
+    _pin_token = None
+    if uid and char_name and _force_pile_path.get() is None:
+        try:
+            # 主角变体 pair 共享 pin 键 (1501/1502 同走"漂泊者·衍射"); 同 pair 内跨 char_id 查 hash。
+            pin_key = panel_card_pref.pair_pin_key(role_detail.role.roleId, char_name)
+            pinned_hash = panel_card_pref.get_pin(str(uid), pin_key)
+            if pinned_hash:
+                pinned_path = _hash_lookup_in_pair(
+                    "card", str(role_detail.role.roleId), pinned_hash
+                )
+                if pinned_path is not None and pinned_path.is_file():
+                    _pin_token = _force_pile_path.set(pinned_path)
+        except Exception as _e:
+            logger.debug(f"[鸣潮] 应用面板图绑定失败, 回退默认: {_e}")
+    try:
+        is_custom, role_pile, role_pile_path = await get_role_pile_with_path(role_detail.role.roleId, True)
+    finally:
+        if _pin_token is not None:
+            _force_pile_path.reset(_pin_token)
     char_mask = Image.open(TEXT_PATH / "char_mask.png")
     char_fg = Image.open(TEXT_PATH / "char_fg.png")
 
@@ -545,53 +570,9 @@ async def draw_fixed_img(img, avatar, account_info, role_detail, locale=""):
     img.paste(char_fg, (25, 170), char_fg)
 
     if is_custom and role_pile_path is not None:
-        hash_id = hashlib.sha256(role_pile_path.name.encode()).hexdigest()[:8]
+        hash_id = compute_hash(role_pile_path.name)
         draw = ImageDraw.Draw(img)
         draw_text_with_shadow(draw, hash_id, 525, 270, waves_font_12, offset=(1, 1), shadow_color="gray", anchor="rm")
-
-
-def resize_and_center_image(image, output_size=(560, 1000), background_color=(255, 255, 255, 0), is_custom=False):
-    """
-    根据输入的图片，调整其尺寸以尽量填充目标尺寸，并保持居中。
-    若宽度过长或高度过长，会根据图片的比例自动调整，以保持居中并尽量维持固定尺寸（560x1000）。
-
-    :param image: 原始图片对象
-    :param output_size: 输出图片大小 (宽度, 高度)
-    :param background_color: 填充背景的颜色 (默认为透明)
-    :param is_custom: 是否为自定义面板，决定是否需要调整图片
-    :return: 调整后的图片对象
-    """
-    # 如果不需要自定义调整，直接返回原图
-    if not is_custom:
-        return image
-
-    image = image.copy()
-
-    # 获取原始图片的宽度和高度
-    img_width, img_height = image.size
-    target_width, target_height = output_size
-
-    # 如果图片的宽度大于高度，则根据宽度缩放图片
-    if img_width > img_height:
-        scale_factor = target_width / img_width
-        new_width = target_width
-        new_height = int(img_height * scale_factor)
-    else:
-        scale_factor = target_height / img_height
-        new_width = int(img_width * scale_factor)
-        new_height = target_height
-
-    image = image.resize((new_width, new_height))
-
-    result_image = Image.new("RGBA", output_size, background_color)
-
-    # 计算粘贴位置，居中对齐
-    paste_x = (target_width - new_width) // 2
-    paste_y = (target_height - new_height) // 2
-
-    result_image.paste(image, (paste_x, paste_y), image)
-
-    return result_image
 
 
 async def draw_char_detail_img(
@@ -609,12 +590,15 @@ async def draw_char_detail_img(
     char, damageId = parse_text_and_number(char)
 
     char_id = char_name_to_char_id(char)
-    if not char_id:
+    if not char_id or len(char_id) != 4 or not char_id.isdigit():
         return f"未找到指定角色, 请检查输入是否正确！"
 
     char_name = alias_to_char_name(char)
 
     damageDetail = DamageDetailRegister.find_class(char_id)
+    if damageDetail and not WutheringWavesConfig.get_config("WavesToken").data:
+        logger.info(f"[鸣潮] {char_name} 未接入总服务器, 跳过伤害绘制")
+        damageDetail = None
     ph_sum_value = 250
     jineng_len = 180
     dd_len = 0
@@ -687,6 +671,25 @@ async def draw_char_detail_img(
     )
     if isinstance(role_detail, str):
         return role_detail
+
+    # def _ph_fp(rd):
+    #     try:
+    #         pd = rd.phantomData
+    #         if pd is None:
+    #             return "phantomData=None"
+    #         ep = pd.equipPhantomList
+    #         if ep is None:
+    #             return f"phantomData.cost={pd.cost} equipPhantomList=None"
+    #         slots = [bool(x and x.phantomProp) for x in ep]
+    #         return f"phantomData.cost={pd.cost} equipPhantomList(len={len(ep)} bool={slots})"
+    #     except Exception as ex:
+    #         return f"_ph_fp_err: {type(ex).__name__}: {ex}"
+    # logger.warning(
+    #     f"[鸣潮·伤害诊断] entry char_id={char_id} char={char_name} "
+    #     f"is_limit_query={is_limit_query} damageId={damageId} uid={uid} "
+    #     f"role_id={getattr(getattr(role_detail, 'role', None), 'roleId', None)} "
+    #     f"role_detail_id={id(role_detail)} {_ph_fp(role_detail)}"
+    # )
 
     change_command = ""
     oneRank: Optional[OneRankResponse] = None
@@ -784,7 +787,7 @@ async def draw_char_detail_img(
     # 创建背景
     img = await get_card_bg(1200, 1250 + echo_list + ph_sum_value + jineng_len + dd_len, "bg3")
     # 固定位置
-    await draw_fixed_img(img, avatar, account_info, role_detail, locale)
+    await draw_fixed_img(img, avatar, account_info, role_detail, locale, uid=uid, char_name=char_name)
 
     # 声骸
     img.paste(phantom_temp, (0, 1320 + jineng_len), phantom_temp)
@@ -1058,7 +1061,7 @@ async def draw_char_score_img(ev: Event, uid: str, char: str, user_id: str, wave
     char, damageId = parse_text_and_number(char)
 
     char_id = char_name_to_char_id(char)
-    if not char_id:
+    if not char_id or len(char_id) != 4 or not char_id.isdigit():
         return f"未找到指定角色, 请检查输入是否正确！"
     char_name = alias_to_char_name(char)
 
@@ -1116,7 +1119,7 @@ async def draw_char_score_img(ev: Event, uid: str, char: str, user_id: str, wave
     # 创建背景
     img = await get_card_bg(1200, 3380, "bg3")
     # 固定位置
-    await draw_fixed_img(img, avatar, account_info, role_detail, locale)
+    await draw_fixed_img(img, avatar, account_info, role_detail, locale, uid=uid, char_name=char_name)
 
     # 声骸属性
     char_id = role_detail.role.roleId
@@ -1152,6 +1155,8 @@ async def draw_char_score_img(ev: Event, uid: str, char: str, user_id: str, wave
             if _phantom and _phantom.phantomProp:
                 props = _phantom.get_props()
                 _score, _bg = calc_phantom_score(char_id, props, _phantom.cost, calc.calc_temp)
+                if _score > 49.95:
+                    _score = 50.0
 
                 phantom_score += _score
                 sh_title = Image.open(TEXT_PATH / f"sh_title_{_bg}.png")

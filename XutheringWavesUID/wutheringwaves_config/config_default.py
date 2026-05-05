@@ -58,7 +58,7 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
     ),
     "WavesLoginUrlSelf": GsBoolConfig(
         "强制【鸣潮登录url】为自己的域名",
-        "强制【鸣潮登录url】为自己的域名",
+        "外置登录服务请关闭；自己穿透或 VPS 反代请打开",
         False,
     ),
     "WavesTencentWord": GsBoolConfig(
@@ -127,7 +127,7 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
     ),
     "HideUid": GsBoolConfig(
         "隐藏uid",
-        "隐藏uid",
+        "开启后，所有渲染卡片中显示的UID将以 前2位 + **** + 后2位 的形式显示",
         False,
     ),
     "RoleListQuery": GsBoolConfig(
@@ -209,6 +209,16 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
             "concatenate",
         ],
     ),
+    "WavesUploadAudit": GsBoolConfig(
+        "上传面板图允许审核（需订阅联系主人，建议配合白名单）",
+        "开启后, 无权限的用户使用上传面板图指令时, 若附带了图片, 会通过【联系主人】订阅转发给主人, 由主人审核后用上传指令落地",
+        False,
+    ),
+    "AutoSendCharAfterRefresh": GsBoolConfig(
+        "刷新面板时自动发送角色面板",
+        "全量刷新面板后，自动猜测用户可能想查看的角色面板",
+        True,
+    ),
     "HelpExtraModules": GsListStrConfig(
         "帮助显示额外模块（重启生效）",
         "在帮助中额外显示的模块：roversign(签到)、todayecho(梭哈)、scoreecho(评分)、roverreminder(体力推送)，需自行安装对应插件",
@@ -261,5 +271,20 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
         "外置渲染字体CSS地址",
         "用于HTML渲染的字体CSS URL，外置渲染时传递，一般保留默认即可，如果在本地，可以填http://127.0.0.1:8765/waves/fonts/fonts.css，如果有自己的登录域名：可以使用 你的登录域名根/waves/fonts/fonts.css",
         "https://fonts.loli.net/css2?family=JetBrains+Mono:wght@500;700&family=Oswald:wght@500;700&family=Noto+Sans+SC:wght@400;700&family=Noto+Sans+JP:wght@400;700&family=Noto+Sans+KR:wght@400;700&family=Noto+Color+Emoji&display=swap",
+    ),
+    "WavesPanelEditPassword": GsStrConfig(
+        "面板图编辑面板密码",
+        "为空则关闭网页面板图/背景图编辑工具；设置后通过 HTTP Basic Auth 鉴权（用户名固定 admin），地址 /waves/panel-edit/",
+        "",
+    ),
+    "WavesPanelEditGuestView": GsBoolConfig(
+        "面板图编辑访客只读浏览",
+        "开启后，未登录用户可浏览图片列表（不渲染预览，不占用服务器资源）；上传/裁剪/删除/覆盖仍需密码",
+        False,
+    ),
+    "WavesGachaWebPage": GsBoolConfig(
+        "抽卡网页查看功能",
+        "开启后，用户可发送【抽卡页面/抽卡网页/网页抽卡记录】打开网页查看抽卡详细记录。外置登录需外置登录部署时支持此功能",
+        False,
     ),
 }
