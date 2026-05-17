@@ -572,13 +572,15 @@ def _draw_challenge_monster_card(
     text_x = x + 64
     text_w = max(40, width - 72)
     name_lines = _wrap_matrix_text_px(name, waves_font_18, text_w)
-    for idx, line in enumerate(name_lines[:2]):
+    name_max_lines = 1 if level else 2
+    for idx, line in enumerate(name_lines[:name_max_lines]):
         draw.text((text_x, y + 18 + idx * 20), line, "white", waves_font_18, "lm")
+
+    if level:
+        draw.text((text_x, y + 42), f"Lv.{level}", (210, 210, 210), waves_font_14, "lm")
 
     meta_y = y + height - 18
     tag_text = f"{element_name}抗性" if element_name not in ("无", "无属性", "未知") else element_name
-    if level:
-        tag_text = f"Lv.{level} {tag_text}"
     elem_w = min(_text_width(tag_text, waves_font_14) + 14, max(34, width - 72))
     elem_x = text_x
     _draw_matrix_tag(draw, (elem_x, meta_y - 11, elem_x + elem_w, meta_y + 11), tag_text, color)
