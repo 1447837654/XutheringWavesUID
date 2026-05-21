@@ -6,7 +6,7 @@ from .set_config import set_waves_user_value
 from .wutheringwaves_config import WutheringWavesConfig, ShowConfig
 from ..utils.constants import WAVES_GAME_ID
 from ..utils.database.models import WavesBind, WavesLangSettings, WavesUser
-from ..utils.util import hide_uid
+from ..utils.util import get_hide_uid_pref, hide_uid
 
 
 sv_self_config = SV("waves配置", priority=3)
@@ -55,6 +55,8 @@ async def send_config_ev(bot: Bot, ev: Event):
 
     # 语言设置不需要绑定uid
     if "语言" in ev.text or "語言" in ev.text:
+        if not WutheringWavesConfig.get_config("EnableLocalization").data:
+            return await _say(bot, at_sender, "[鸣潮] 多语言本地化未启用，请先在配置中开启【启用多语言本地化】")
         VALID_LANGS = {"chs", "cht", "en", "jp", "kr"}
         lang = ev.text.replace("语言", "").replace("語言", "").strip().lower()
         if lang not in VALID_LANGS:
@@ -77,6 +79,12 @@ async def send_config_ev(bot: Bot, ev: Event):
         # char_name = alias_to_char_name(value)
         # im = await set_waves_user_value(ev, func, uid, char_name)
         im = await set_waves_user_value(ev, func, uid, value)
+    elif "隐藏uid" in ev.text.lower():
+        if not await _ensure_waves_user_row(bot, ev, uid, at_sender):
+            return
+        # 设置隐藏UID → on; 设置取消隐藏UID → off
+        value = "off" if "取消" in ev.text else "on"
+        im = await set_waves_user_value(ev, "隐藏UID", uid, value)
     elif "面板图" in ev.text:
         import re
         from ..utils import panel_card_pref
@@ -113,9 +121,13 @@ async def send_config_ev(bot: Bot, ev: Event):
             return await _say(bot, at_sender, f"未找到角色【{pin_key}】id 为【{hash_id}】的面板图！")
 
         panel_card_pref.set_pin(uid, pin_key, hash_id)
+        masked_uid = hide_uid(
+            uid,
+            user_pref=await get_hide_uid_pref(uid, ev.user_id, ev.bot_id),
+        )
         return await _say(
             bot, at_sender,
-            f"设置成功!\n特征码[{hide_uid(uid)}]\n角色【{pin_key}】面板图已绑定到 id【{hash_id}】",
+            f"设置成功!\n特征码[{masked_uid}]\n角色【{pin_key}】面板图已绑定到 id【{hash_id}】",
         )
     elif "群排行" in ev.text:
         if not await _ensure_group_admin(bot, ev, at_sender, "群排行"):
@@ -205,7 +217,7 @@ async def send_config_ev(bot: Bot, ev: Event):
     else:
         return await _say(bot, at_sender, "请输入正确的设置信息...")
 
-    # 仅 体力背景 分支落到这里 (im 为字符串或非字符串响应); 其它分支早就 return 了。
+    # 体力背景 / 隐藏UID 分支落到这里 (im 为字符串或非字符串响应); 其它分支早就 return 了。
     if isinstance(im, str):
         await _say(bot, at_sender, im.rstrip("\n"))
     else:

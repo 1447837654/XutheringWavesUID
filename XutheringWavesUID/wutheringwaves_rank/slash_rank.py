@@ -15,10 +15,8 @@ from gsuid_core.bot import Bot
 from gsuid_core.logger import logger
 from gsuid_core.models import Event
 from gsuid_core.utils.image.convert import convert_img
-from gsuid_core.utils.image.image_tools import crop_center_img
 
 from ..utils.util import get_version, hide_uid
-from ..utils.cache import TimedCache
 from ..utils.image import (
     RED,
     GREY,
@@ -32,7 +30,6 @@ from ..utils.image import (
     get_ICON,
     add_footer,
     get_waves_bg,
-    get_qq_avatar,
     get_square_avatar,
     pic_download_from_url,
     parse_bot_color_config,
@@ -88,9 +85,6 @@ async def get_endless_rank_token_condition(ev) -> Tuple[bool, Dict[Tuple[str, st
 
 
 TEXT_PATH = Path(__file__).parent / "texture2d"
-avatar_mask = Image.open(TEXT_PATH / "avatar_mask.png")
-default_avatar_char_id = "1505"
-pic_cache = TimedCache(600, 200)
 
 BOT_COLOR = [
     WAVES_MOLTEN,
@@ -127,36 +121,10 @@ def parse_rank_date(date_str: str) -> Optional[datetime]:
         return None
 
 
-def get_score_color(score: int):
-    """总排行分数颜色"""
-    if score >= 30000:
-        return (255, 0, 0)
-    elif score >= 25000:
-        return (234, 183, 4)
-    elif score >= 20000:
-        return (185, 106, 217)
-    elif score >= 15000:
-        return (22, 145, 121)
-    elif score >= 10000:
-        return (53, 152, 219)
-    else:
-        return (255, 255, 255)
-
-
-def get_local_score_color(score: int):
-    """本地排行分数颜色"""
-    if score >= 30000:
-        return (255, 0, 0)
-    elif score >= 20000:
-        return (234, 183, 4)
-    elif score >= 10000:
-        return (185, 106, 217)
-    elif score >= 5500:
-        return (22, 145, 121)
-    elif score >= 4500:
-        return (53, 152, 219)
-    else:
-        return (200, 200, 200)
+from ._colors import (
+    get_slash_local_rank_color as get_local_score_color,
+    get_slash_total_rank_color as get_score_color,
+)
 
 
 async def get_rank(item: SlashRankItem) -> Optional[SlashRankRes]:
@@ -184,6 +152,7 @@ async def get_rank(item: SlashRankItem) -> Optional[SlashRankRes]:
             logger.exception(f"获取排行失败: {e}")
 
 
+# TODO: PIL 卸到线程池 (loop 内 await get_square_avatar / pic_download_from_url 较多, 需要批量预取重构)
 async def draw_all_slash_rank_card(bot: Bot, ev: Event):
     waves_id = await WavesBind.get_uid_by_game(ev.user_id, ev.bot_id)
     match = re.search(r"(\d+)", ev.raw_text)
@@ -391,70 +360,7 @@ async def draw_all_slash_rank_card(bot: Bot, ev: Event):
     return card_img
 
 
-async def _fetch_sender_avatar_image(url: str) -> Optional[Image.Image]:
-    if not url or not url.startswith(("http://", "https://")):
-        return None
-    cache_key = f"sender:{url}"
-    if WutheringWavesConfig.get_config("QQPicCache").data:
-        cached = pic_cache.get(cache_key)
-        if cached:
-            return cached
-    try:
-        import io
-        import httpx
-
-        async with httpx.AsyncClient(timeout=6, follow_redirects=False) as client:
-            r = await client.get(url, headers={"Referer": ""})
-            if r.status_code != 200 or not r.content:
-                return None
-            img = Image.open(io.BytesIO(r.content)).convert("RGBA")
-        pic_cache.set(cache_key, img)
-        return img
-    except Exception as e:
-        logger.debug(f"sender_avatar 抓取失败 {url}: {e}")
-        return None
-
-
-async def get_avatar(
-    qid: Optional[str],
-    sender_avatar: Optional[str] = None,
-) -> Image.Image:
-    pic: Optional[Image.Image] = None
-    if sender_avatar:
-        pic = await _fetch_sender_avatar_image(sender_avatar)
-
-    if pic is None and qid and qid.isdigit():
-        if WutheringWavesConfig.get_config("QQPicCache").data:
-            pic = pic_cache.get(qid)
-            if not pic:
-                pic = await get_qq_avatar(qid, size=100)
-                pic_cache.set(qid, pic)
-        else:
-            pic = await get_qq_avatar(qid, size=100)
-            pic_cache.set(qid, pic)
-
-    if pic is not None:
-        pic_temp = crop_center_img(pic, 120, 120)
-        img = Image.new("RGBA", (180, 180))
-        avatar_mask_temp = avatar_mask.copy()
-        mask_pic_temp = avatar_mask_temp.resize((120, 120))
-        img.paste(pic_temp, (0, -5), mask_pic_temp)
-    else:
-        pic = await get_square_avatar(default_avatar_char_id)
-
-        pic_temp = Image.new("RGBA", pic.size)
-        pic_temp.paste(pic.resize((160, 160)), (10, 10))
-        pic_temp = pic_temp.resize((160, 160))
-
-        avatar_mask_temp = avatar_mask.copy()
-        mask_pic_temp = Image.new("RGBA", avatar_mask_temp.size)
-        mask_pic_temp.paste(avatar_mask_temp, (-20, -45), avatar_mask_temp)
-        mask_pic_temp = mask_pic_temp.resize((160, 160))
-
-        img = Image.new("RGBA", (180, 180))
-        img.paste(pic_temp, (0, 0), mask_pic_temp)
-
-    return img
+from .rank_avatar import get_avatar
 
 
 class SlashRankListInfo:
@@ -588,6 +494,7 @@ async def get_five_star_chain_total(uid: str) -> int:
         return 0
 
 
+# TODO: PIL 卸到线程池 (loop 内 await get_role_chain_count / get_square_avatar / pic_download_from_url 频繁, 需要批量预取重构)
 async def draw_slash_rank_list(bot: Bot, ev: Event):
     """绘制无尽排行"""
     start_time = time.time()
@@ -687,7 +594,10 @@ async def draw_slash_rank_list(bot: Bot, ev: Event):
     card_img.paste(char_mask_temp, (0, 0), char_mask_temp)
 
     # 获取头像
-    tasks = [get_avatar(rank.user_id) for rank in rankInfoList_display]
+    tasks = [
+        get_avatar(rank.user_id, getattr(rank, "sender_avatar", ""))
+        for rank in rankInfoList_display
+    ]
     results = await asyncio.gather(*tasks)
 
     # 绘制排行条目

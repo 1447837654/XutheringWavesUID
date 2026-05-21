@@ -28,6 +28,7 @@ exec_list.extend(
         'ALTER TABLE WavesUser ADD COLUMN record_id TEXT DEFAULT ""',
         'ALTER TABLE WavesUser ADD COLUMN platform TEXT DEFAULT ""',
         'ALTER TABLE WavesUser ADD COLUMN stamina_bg_value TEXT DEFAULT ""',
+        'ALTER TABLE WavesUser ADD COLUMN hide_uid_self_value TEXT DEFAULT ""',
         'ALTER TABLE WavesUser ADD COLUMN bbs_sign_switch TEXT DEFAULT "off"',
         'ALTER TABLE WavesUser ADD COLUMN bat TEXT DEFAULT ""',
         'ALTER TABLE WavesUser ADD COLUMN did TEXT DEFAULT ""',
@@ -36,6 +37,8 @@ exec_list.extend(
         'ALTER TABLE WavesBind ADD COLUMN pgr_uid TEXT DEFAULT ""',
         'ALTER TABLE WavesUser ADD COLUMN created_time INTEGER',
         'ALTER TABLE WavesUser ADD COLUMN last_used_time INTEGER',
+        'ALTER TABLE WavesUser ADD COLUMN avatar_url TEXT DEFAULT ""',
+        'ALTER TABLE WavesUserSdk ADD COLUMN bat_expires_at INTEGER',
         "UPDATE WavesUser SET uid = COALESCE(NULLIF(uid, ''), pgr_uid) WHERE IFNULL(uid, '') = '' AND IFNULL(pgr_uid, '') != ''",
         "UPDATE WavesUser SET game_id = 2 WHERE IFNULL(pgr_uid, '') != ''",
         "UPDATE WavesUser SET game_id = CASE WHEN IFNULL(game_id, 0) = 0 THEN 3 ELSE game_id END WHERE IFNULL(pgr_uid, '') = ''",
@@ -172,6 +175,7 @@ class WavesUser(User, table=True):
     record_id: Optional[str] = Field(default=None, title="鸣潮记录ID")
     platform: str = Field(default="", title="ck平台")
     stamina_bg_value: str = Field(default="", title="体力背景")
+    hide_uid_self_value: str = Field(default="", title="隐藏UID")
     bbs_sign_switch: str = Field(default="off", title="自动社区签到")
     bat: str = Field(default="", title="bat")
     did: str = Field(default="", title="did")
@@ -179,6 +183,7 @@ class WavesUser(User, table=True):
     is_login: bool = Field(default=False, title="是否waves登录")
     created_time: Optional[int] = Field(default=None, title="创建时间")
     last_used_time: Optional[int] = Field(default=None, title="最后使用时间")
+    avatar_url: str = Field(default="", title="头像URL")
 
     @classmethod
     @with_session
@@ -446,6 +451,54 @@ class WavesUser(User, table=True):
 
             return True
         return False
+
+    @classmethod
+    @with_session
+    async def get_avatar_url(
+        cls: Type[T_WavesUser],
+        session: AsyncSession,
+        user_id: str,
+    ) -> str:
+        """取该 user_id 名下最新一条非空头像 URL（按 last_used_time DESC）；都为空则返回空串"""
+        sql = (
+            select(cls.avatar_url)
+            .where(
+                and_(
+                    col(cls.user_id) == user_id,
+                    col(cls.avatar_url) != null(),
+                    col(cls.avatar_url) != "",
+                )
+            )
+            .order_by(col(cls.last_used_time).desc())
+            .limit(1)
+        )
+        result = await session.execute(sql)
+        return result.scalar() or ""
+
+    @classmethod
+    @with_session
+    async def update_avatar_url(
+        cls: Type[T_WavesUser],
+        session: AsyncSession,
+        user_id: str,
+        bot_id: str,
+        avatar_url: str,
+    ) -> int:
+        """非空时更新该 (user_id, bot_id) 下所有行的头像 URL"""
+        if not avatar_url:
+            return 0
+        sql = (
+            update(cls)
+            .where(
+                and_(
+                    col(cls.user_id) == user_id,
+                    col(cls.bot_id) == bot_id,
+                )
+            )
+            .values(avatar_url=avatar_url)
+        )
+        result = await session.execute(sql)
+        return result.rowcount
 
     @classmethod
     @with_session

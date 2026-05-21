@@ -19,6 +19,7 @@ GET_SLASH_APPEAR_RATE = f"{MAIN_URL}/api/waves/slash/appear_rate"
 GET_SLASH_RANK_URL = f"{MAIN_URL}/top/waves/slash/rank"
 UPLOAD_MATRIX_RECORD_URL = f"{MAIN_URL}/top/waves/matrix/upload"
 GET_MATRIX_RANK_URL = f"{MAIN_URL}/top/waves/matrix/rank"
+GET_MATRIX_APPEAR_RATE = f"{MAIN_URL}/api/waves/matrix/appear_rate"
 
 ABYSS_TYPE = Literal["l4", "m4", "r4", "a"]
 
@@ -212,6 +213,7 @@ class SlashDetailRequest(BaseModel):
     halfList: List[SlashDetail]
     rank: str
     score: int
+    sender_avatar: Optional[str] = ""
 
 
 # ------------------------------------------------------------
@@ -249,6 +251,7 @@ class SlashRank(BaseModel):
     waves_id: str  # 鸣潮id
     kuro_name: str  # 库洛用户名
     alias_name: str  # 主人别名
+    sender_avatar: Optional[str] = ""
 
 
 class SlashRankData(BaseModel):
@@ -275,9 +278,6 @@ class MatrixTeamDetail(BaseModel):
     buff_id: int  # buffID
     role_icons: List[str]  # 角色头像URL列表
     char_ids: List[int] = Field(default_factory=list)  # 匹配出的角色ID列表
-    pass_boss: int  # 击败boss数
-    boss_count: int  # boss总数
-    round: int  # 轮次
     score: int  # 队伍得分
 
 
@@ -288,6 +288,7 @@ class MatrixDetailRequest(BaseModel):
     score: int  # 总分数
     teamCount: int = 0  # 使用队伍数
     teams: List[MatrixTeamDetail]  # 队伍列表
+    sender_avatar: Optional[str] = ""
 
 
 # ------------------------------------------------------------
@@ -325,6 +326,7 @@ class MatrixRank(BaseModel):
     waves_id: str
     kuro_name: str
     alias_name: str
+    sender_avatar: Optional[str] = ""
 
 
 class MatrixRankData(BaseModel):

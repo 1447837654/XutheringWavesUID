@@ -4,9 +4,12 @@ from gsuid_core.models import Event
 from ..utils.constants import WAVES_GAME_ID
 from ..utils.name_convert import is_valid_char_name, alias_to_char_name
 from ..utils.database.models import WavesUser
-from ..utils.util import hide_uid
+from ..utils.util import get_hide_uid_pref, hide_uid
 
-WAVES_USER_MAP = {"体力背景": "stamina_bg"}
+WAVES_USER_MAP = {
+    "体力背景": "stamina_bg",
+    "隐藏UID": "hide_uid_self",
+}
 
 
 def _is_valid_stamina_bg_hash(hash_id: str) -> bool:
@@ -21,7 +24,7 @@ async def set_waves_user_value(ev: Event, func: str, uid: str, value: str):
         status = WAVES_USER_MAP[func]
     else:
         return "该配置项不存在!"
-    logger.info("[设置{}] uid:{} value: {}".format(func, uid, value))
+    logger.info("[鸣潮·设置{}] uid:{} value: {}".format(func, uid, value))
     if (
         await WavesUser.update_data_by_data(
             select_data={
@@ -34,7 +37,15 @@ async def set_waves_user_value(ev: Event, func: str, uid: str, value: str):
         )
         == 0
     ):
-        masked_uid = hide_uid(uid)
+        if func == "隐藏UID":
+            # 调度层只会传 on/off; 用 value 做即时回显, 无需再读 DB
+            masked_uid = hide_uid(uid, user_pref=value)
+            action = "已开启" if value == "on" else "已关闭"
+            return f"{action}隐藏UID!\n特征码[{masked_uid}]"
+        masked_uid = hide_uid(
+            uid,
+            user_pref=await get_hide_uid_pref(uid, ev.user_id, ev.bot_id),
+        )
         if func == "体力背景":
             if not value:
                 return f"已重置体力背景为默认!\n特征码[{masked_uid}]"

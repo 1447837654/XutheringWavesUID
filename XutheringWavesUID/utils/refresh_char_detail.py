@@ -8,19 +8,20 @@ import aiofiles
 from gsuid_core.logger import logger
 from gsuid_core.models import Event
 
-from ..utils.hint import error_reply
-from ..utils.util import get_version
-from ..utils.api.model import RoleList, AccountBaseInfo, OwnedRoleInfoResponse
-from ..utils.waves_api import waves_api
+from .hint import error_reply
+from .util import get_version
+from .api.model import RoleList, AccountBaseInfo, OwnedRoleInfoResponse
+from .waves_api import waves_api
 from .resource.constant import SPECIAL_CHAR_INT_ALL
-from ..utils.error_reply import WAVES_CODE_101, WAVES_CODE_102
-from ..utils.queues.const import QUEUE_SCORE_RANK
-from ..utils.queues.queues import push_item
-from ..utils.expression_ctx import WavesCharRank, get_waves_char_rank
+from .error_reply import WAVES_CODE_101, WAVES_CODE_102
+from .queues.const import QUEUE_SCORE_RANK
+from .queues.queues import push_item
+from .expression_ctx import WavesCharRank, get_waves_char_rank
 from ..wutheringwaves_config import PREFIX, WutheringWavesConfig
-from ..utils.resource.RESOURCE_PATH import PLAYER_PATH, CACHE_PATH
-from ..utils.char_info_utils import get_all_roleid_detail_info_int
-from ..utils.api.model import AccountBaseInfo as _AccountBaseInfo
+from .resource.RESOURCE_PATH import PLAYER_PATH, CACHE_PATH
+from .char_info_utils import get_all_roleid_detail_info_int
+from .char_state import record_refresh_batch
+from .api.model import AccountBaseInfo as _AccountBaseInfo
 
 
 async def save_base_info_cache(uid: str, account_info: _AccountBaseInfo):
@@ -206,6 +207,11 @@ async def save_card_info(
 
     save_data = list(old_data.values())
 
+    try:
+        await record_refresh_batch(uid, refresh_update.keys(), refresh_unchanged.keys())
+    except Exception as e:
+        logger.warning(f"[鸣潮·state] refresh 状态记录失败 uid={uid}: {e}")
+
     await send_card(uid, user_id, save_data, is_self_ck, token, role_info, waves_data, sender_avatar)
 
     try:
@@ -220,7 +226,7 @@ async def save_card_info(
     waves_char_rank = await get_waves_char_rank(uid, save_data, True)
 
     # 候选门槛: 不在漂泊者列表、本次确有变更、有旧分、旧分>140、
-    #   跨档 / 单角色刷新 delta∈(0,20) ; 否则 delta∈(3,30)
+    #   跨档 / 单角色刷新 delta∈(0,50) ; 否则 delta∈(3,50)
     # 选取: 优先跨越档位 (210 > 195 > 175) 的角色; 同档位中挑 new 最高
     # 一次刷了 >=20 个角色, 不再提示 top_improver(全量刷新场景)
     TIER_THRESHOLDS = (210.0, 195.0, 175.0)
@@ -247,7 +253,7 @@ async def save_card_info(
                 continue
             delta = new - old
             crossed_tier = any(new >= tier > old for tier in TIER_THRESHOLDS)
-            lo, hi = (0, 20) if (crossed_tier or single_char) else (3, 30)
+            lo, hi = (0, 50) if (crossed_tier or single_char) else (3, 50)
             if not (lo < delta < hi):
                 continue
             candidates.append({
@@ -291,7 +297,7 @@ async def save_char_list_cache(uid: str, waves_char_rank: Optional[List[WavesCha
             load_char_list_data,
             save_char_list_data,
         )
-        from ..utils.resource.constant import SPECIAL_CHAR_RANK_MAP
+        from .resource.constant import SPECIAL_CHAR_RANK_MAP
 
         # 加载现有的角色评分数据
         existing_char_list_data = await load_char_list_data(uid)

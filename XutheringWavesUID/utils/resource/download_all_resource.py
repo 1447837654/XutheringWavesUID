@@ -43,7 +43,7 @@ async def check_speed(plugin_name):
     URL_LIB = {
         "小维1号": "https://ww1.loping151.top/",
         "小维2号": "https://ww2.loping151.top/",
-        "小维3号": "https://ww3.loping151.top/"
+        "小维3号": "https://ww3.loping151.cn/"
     }
 
     async def _measure_speed(
@@ -259,3 +259,7 @@ async def reload_all_modules():
     # 重新加载本地化字典
     from ..localization import init_localization
     init_localization()
+
+    # 重新注册 AI 知识库（仅 AI 启用时生效）
+    from ...wutheringwaves_ai_rag import reload_ai_rag
+    await reload_ai_rag()

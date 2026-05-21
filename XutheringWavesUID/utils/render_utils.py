@@ -7,6 +7,7 @@ from pathlib import Path
 
 import httpx
 
+from gsuid_core.pool import to_thread
 from gsuid_core.logger import logger
 from gsuid_core.config import core_config, CONFIG_DEFAULT
 from gsuid_core.app_life import app as fastapi_app
@@ -372,7 +373,7 @@ def image_to_base64(image_path: Union[str, Path]) -> str:
             ext = "jpeg"
         return f"data:image/{ext};base64,{base64.b64encode(data).decode('utf-8')}"
     except Exception as e:
-        logger.warning(f"[渲染工具] 图片转 base64 失败: {image_path}, {e}")
+        logger.warning(f"[鸣潮·渲染工具] 图片转 base64 失败: {image_path}, {e}")
         return ""
 
 
@@ -387,7 +388,7 @@ def get_logo_b64() -> Optional[str]:
             data = f.read()
             return f"data:image/png;base64,{base64.b64encode(data).decode('utf-8')}"
     except Exception as e:
-        logger.warning(f"[渲染工具] Logo loading failed: {e}")
+        logger.warning(f"[鸣潮·渲染工具] Logo loading failed: {e}")
         return None
 
 
@@ -411,8 +412,29 @@ def get_footer_b64(footer_type: str = "black") -> Optional[str]:
             data = f.read()
             return f"data:image/png;base64,{base64.b64encode(data).decode('utf-8')}"
     except Exception as e:
-        logger.warning(f"[渲染工具] Footer loading failed: {e}")
+        logger.warning(f"[鸣潮·渲染工具] Footer loading failed: {e}")
         return None
+
+
+@to_thread
+def _bake_image_to_webp(
+    local_path: Path, bake_path: Path, cover_size, quality: int
+) -> bytes:
+    from PIL import Image
+
+    img = Image.open(local_path)
+    if cover_size is not None:
+        tw, th = cover_size
+        scale = max(tw / img.width, th / img.height)
+        new_w, new_h = int(img.width * scale), int(img.height * scale)
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+        left = (new_w - tw) // 2
+        top = (new_h - th) // 2
+        img = img.crop((left, top, left + tw, top + th))
+
+    img.save(bake_path, "WEBP", quality=quality)
+    with open(bake_path, "rb") as f:
+        return f.read()
 
 
 async def get_image_b64_with_cache(
@@ -464,31 +486,17 @@ async def get_image_b64_with_cache(
                 data = f.read()
             return f"data:image/webp;base64,{base64.b64encode(data).decode('utf-8')}"
 
-        # 未命中 — PIL 处理 + 写入烘焙缓存
-        img = Image.open(local_path)
-
-        if cover_size is not None:
-            tw, th = cover_size
-            scale = max(tw / img.width, th / img.height)
-            new_w, new_h = int(img.width * scale), int(img.height * scale)
-            img = img.resize((new_w, new_h), Image.LANCZOS)
-            left = (new_w - tw) // 2
-            top = (new_h - th) // 2
-            img = img.crop((left, top, left + tw, top + th))
-
-        img.save(bake_path, 'WEBP', quality=quality or 80)
-
-        with open(bake_path, "rb") as f:
-            data = f.read()
+        # 未命中 — PIL 处理 + 写入烘焙缓存（卸到线程池）
+        data = await _bake_image_to_webp(local_path, bake_path, cover_size, quality or 80)
 
         orig_size = local_path.stat().st_size
         logger.debug(
-            f"[渲染工具] 烘焙: {filename} → {bake_name}, "
+            f"[鸣潮·渲染工具] 烘焙: {filename} → {bake_name}, "
             f"原始: {orig_size} bytes, 烘焙后: {len(data)} bytes"
         )
 
         return f"data:image/webp;base64,{base64.b64encode(data).decode('utf-8')}"
 
     except Exception as e:
-        logger.warning(f"[渲染工具] 获取图片 base64 失败: {url}, {e}")
+        logger.warning(f"[鸣潮·渲染工具] 获取图片 base64 失败: {url}, {e}")
         return ""
