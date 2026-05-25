@@ -1,5 +1,6 @@
 import re
 import json
+import time
 import asyncio
 from typing import Dict, List, Union, Optional
 
@@ -7,21 +8,25 @@ import aiofiles
 
 from gsuid_core.logger import logger
 from gsuid_core.models import Event
+from gsuid_core.pool import to_process
 
 from .hint import error_reply
-from .util import get_version
+from .util import get_version, hide_uid
 from .api.model import RoleList, AccountBaseInfo, OwnedRoleInfoResponse
 from .waves_api import waves_api
 from .resource.constant import SPECIAL_CHAR_INT_ALL
 from .error_reply import WAVES_CODE_101, WAVES_CODE_102
 from .queues.const import QUEUE_SCORE_RANK
 from .queues.queues import push_item
-from .expression_ctx import WavesCharRank, get_waves_char_rank
+from .expression_ctx import WavesCharRank, get_waves_char_rank, _compute_one_char_rank
 from ..wutheringwaves_config import PREFIX, WutheringWavesConfig
 from .resource.RESOURCE_PATH import PLAYER_PATH, CACHE_PATH
 from .char_info_utils import get_all_roleid_detail_info_int
 from .char_state import record_refresh_batch
 from .api.model import AccountBaseInfo as _AccountBaseInfo
+
+_compute_one_char_rank_proc = to_process(_compute_one_char_rank)
+_BG_TASKS: set = set()
 
 
 async def save_base_info_cache(uid: str, account_info: _AccountBaseInfo):
@@ -114,45 +119,75 @@ async def send_card(
     waves_data: Optional[List] = None,
     sender_avatar: str = "",
 ):
-    waves_char_rank: Optional[List[WavesCharRank]] = None
-
     WavesToken = WutheringWavesConfig.get_config("WavesToken").data
+    if not WavesToken:
+        return
 
-    if WavesToken:
-        waves_char_rank = await get_waves_char_rank(uid, save_data, True)
+    if not (is_self_ck and token and save_data and role_info and waves_data and user_id):
+        return
+    # 单角色上传排行
+    if len(waves_data) != 1 and len(role_info.roleList) != len(save_data):
+        logger.warning(
+            f"角色数量不一致，role_info.roleNum:{len(role_info.roleList)} != save_data:{len(save_data)}"
+        )
+        return
+    account_info = await waves_api.get_base_info(uid, token=token)
+    if not account_info.success:
+        return account_info.throw_msg()
+    if not account_info.data:
+        return f"用户未展示数据, 请尝试【{PREFIX}登录】"
+    account_info = AccountBaseInfo.model_validate(account_info.data)
+    if len(waves_data) != 1 and account_info.roleNum != len(save_data):
+        logger.warning(
+            f"角色数量不一致，role_info.roleNum:{account_info.roleNum} != save_data:{len(save_data)}"
+        )
+        return
 
-    if is_self_ck and token and waves_char_rank and WavesToken and role_info and waves_data and user_id:
-        # 单角色上传排行
-        if len(waves_data) != 1 and len(role_info.roleList) != len(save_data):
-            logger.warning(
-                f"角色数量不一致，role_info.roleNum:{len(role_info.roleList)} != waves_char_rank:{len(save_data)}"
-            )
-            return
-        account_info = await waves_api.get_base_info(uid, token=token)
-        if not account_info.success:
-            return account_info.throw_msg()
-        if not account_info.data:
-            return f"用户未展示数据, 请尝试【{PREFIX}登录】"
-        account_info = AccountBaseInfo.model_validate(account_info.data)
-        if len(waves_data) != 1 and account_info.roleNum != len(save_data):
-            logger.warning(
-                f"角色数量不一致，role_info.roleNum:{account_info.roleNum} != waves_char_rank:{len(save_data)}"
-            )
-            return
-        metadata = {
+    def _build_meta(rank):
+        meta = {
             "user_id": user_id,
             "waves_id": f"{account_info.id}",
             "kuro_name": account_info.name,
             "version": get_version(
-                dynamic=True, user_id=user_id, waves_id=f"{account_info.id}", char_info=str(len(waves_char_rank))
+                dynamic=True, user_id=user_id, waves_id=f"{account_info.id}", char_info=str(len(rank))
             ),
-            "char_info": [r.to_rank_dict() for r in waves_char_rank],
+            "char_info": [r.to_rank_dict() for r in rank],
             "role_num": account_info.roleNum,
             "single_refresh": 1 if len(waves_data) == 1 else 0,
         }
         if sender_avatar:
-            metadata["sender_avatar"] = sender_avatar
-        push_item(QUEUE_SCORE_RANK, metadata)
+            meta["sender_avatar"] = sender_avatar
+        return meta
+
+    # 综合评分丢进程池(to_process, 多核)逐角色并行算; 整个上传在后台进行, 不阻塞出图。
+    # 进程池全挂时退回内联快算(无综合评分, 服务端对空综合评分不覆盖旧值)。
+    async def _upload_rank():
+        try:
+            t0 = time.perf_counter()
+            results = await asyncio.gather(
+                *(_compute_one_char_rank_proc(rd, True, True) for rd in save_data),
+                return_exceptions=True,
+            )
+            ranks = [r for r in results if isinstance(r, WavesCharRank)]
+            errs = [r for r in results if isinstance(r, BaseException)]
+            if errs:
+                logger.warning(
+                    f"[鸣潮·评分] 综合评分并行部分失败 uid={uid}: {len(errs)}/{len(results)} 示例={errs[0]!r}"
+                )
+            if ranks:
+                logger.info(
+                    f"[鸣潮·计时] uid={uid} 综合评分(进程池) 角色数={len(ranks)} 实际={time.perf_counter() - t0:.2f}s"
+                )
+            else:
+                ranks = await get_waves_char_rank(uid, save_data, True, need_overall_score=False)
+            if ranks:
+                push_item(QUEUE_SCORE_RANK, _build_meta(ranks))
+        except Exception as e:
+            logger.warning(f"[鸣潮·评分] 排行上传失败 uid={uid}: {e}")
+
+    task = asyncio.create_task(_upload_rank())
+    _BG_TASKS.add(task)
+    task.add_done_callback(_BG_TASKS.discard)
 
 
 async def save_card_info(
@@ -164,6 +199,7 @@ async def save_card_info(
     token: str = "",
     role_info: Optional[RoleList] = None,
     sender_avatar: str = "",
+    is_self: bool = True,
 ):
     if len(waves_data) == 0:
         return
@@ -207,10 +243,11 @@ async def save_card_info(
 
     save_data = list(old_data.values())
 
-    try:
-        await record_refresh_batch(uid, refresh_update.keys(), refresh_unchanged.keys())
-    except Exception as e:
-        logger.warning(f"[鸣潮·state] refresh 状态记录失败 uid={uid}: {e}")
+    if is_self:
+        try:
+            await record_refresh_batch(uid, refresh_update.keys(), refresh_unchanged.keys())
+        except Exception as e:
+            logger.warning(f"[鸣潮·state] refresh 状态记录失败 uid={uid}: {e}")
 
     await send_card(uid, user_id, save_data, is_self_ck, token, role_info, waves_data, sender_avatar)
 
@@ -330,6 +367,7 @@ async def refresh_char(
     waves_map: Optional[Dict] = None,
     is_self_ck: bool = False,
     refresh_type: Union[str, List[str]] = "all",
+    is_self: bool = True,
 ) -> Union[str, List]:
     waves_datas = []
     if not ck:
@@ -342,13 +380,13 @@ async def refresh_char(
         return role_info.throw_msg()
 
     if isinstance(role_info.data, dict) and "roleList" not in role_info.data:
-        return f"鸣潮特征码[{uid}]的角色数据未公开展示，请【{PREFIX}登录】或在库街区展示角色"
+        return f"鸣潮特征码[{hide_uid(uid)}]的角色数据未公开展示，请【{PREFIX}登录】或在库街区展示角色"
 
     try:
         role_info = RoleList.model_validate(role_info.data)
     except Exception as e:
         logger.exception(f"{uid} 角色信息解析失败", e)
-        msg = f"鸣潮特征码[{uid}]获取数据失败\n1.是否注册过库街区\n2.库街区能否查询当前鸣潮特征码数据"
+        msg = f"鸣潮特征码[{hide_uid(uid)}]获取数据失败\n1.是否注册过库街区\n2.库街区能否查询当前鸣潮特征码数据"
         return msg
 
     request_role_ids: List[int] = []
@@ -478,6 +516,7 @@ async def refresh_char(
         token=ck,
         role_info=role_info,
         sender_avatar=sender_avatar,
+        is_self=is_self,
     )
 
     if not waves_datas:
