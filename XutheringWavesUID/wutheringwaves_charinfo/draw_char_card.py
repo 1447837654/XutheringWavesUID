@@ -236,6 +236,7 @@ async def ph_card_draw(
     phantom_temp.alpha_composite(banner3, dest=(0, 0))
 
     from .role_info_change import ensure_default_modal
+    from ..utils.damage.modal import get_role_modal
     ensure_default_modal(role_detail)
 
     ph_0 = Image.open(TEXT_PATH / "ph_0.png")
@@ -252,6 +253,7 @@ async def ph_card_draw(
             calc.phantom_card,
             role_detail.role.roleName,
             role_detail.role.roleId,
+            get_role_modal(role_detail),
         )
 
         for i, _phantom in enumerate(equipPhantomList):
@@ -1210,8 +1212,14 @@ async def draw_char_score_img(ev: Event, uid: str, char: str, user_id: str, wave
     if isinstance(role_detail, str):
         return role_detail
 
+    from ..utils.damage.modal import get_modal_options, get_role_modal
+    weight_modals = get_modal_options(int(role_detail.role.roleId))
+    active_modal = get_role_modal(role_detail)
+    weight_base_y = 2400
+    weight_block_h = 900
+
     # 创建背景
-    img = await get_card_bg(1200, 3380, "bg3")
+    img = await get_card_bg(1200, weight_base_y + max(1, len(weight_modals)) * weight_block_h + 80, "bg3")
     # 固定位置
     await draw_fixed_img(img, avatar, account_info, role_detail, locale, uid=uid, char_name=char_name, user_pref=user_pref)
 
@@ -1221,7 +1229,6 @@ async def draw_char_score_img(ev: Event, uid: str, char: str, user_id: str, wave
 
     phantom_temp = Image.new("RGBA", (1200, 1380))
     right_image_temp = Image.new("RGBA", (600, 1100))
-    introduce_temp = Image.new("RGBA", (1500, 880), (0, 0, 0, 0))
 
     from .role_info_change import ensure_default_modal
     ensure_default_modal(role_detail)
@@ -1240,6 +1247,7 @@ async def draw_char_score_img(ev: Event, uid: str, char: str, user_id: str, wave
             calc.phantom_card,
             role_detail.role.roleName,
             role_detail.role.roleId,
+            active_modal,
         )
         if is_limit_query:
             calc.role_card = calc.enhance_summation_card_value(calc.phantom_card)
@@ -1403,52 +1411,27 @@ async def draw_char_score_img(ev: Event, uid: str, char: str, user_id: str, wave
         draw_text_with_fallback(ph_tips_draw, (350, 50), t(calc.calc_temp['name'], locale, partial=True), (255, 255, 0), waves_font_24, "rm")
         phantom_temp.alpha_composite(ph_tips, (40 + 2 * 370, 45))
 
-        # 简介数据
-        weight_list_temp = weight_list.copy()
-        entry_type_list = weight_list_temp[0].split(",")[1:]
-        main_props = calc.calc_temp["main_props"]
-        sub_pros = calc.calc_temp["sub_props"]
-        skill_weight = calc.calc_temp["skill_weight"]
-        for i, entry in enumerate(weight_list_temp[1:], start=1):
-            entry_list = []
-            if entry == "属性伤害加成":
-                entry_list.append(f"{shuxing}")
-            elif "%" in entry:
-                entry_list.append(entry.replace("%", "百分比"))
-            else:
-                entry_list.append(entry)
-            for entry_type in entry_type_list:
-                if "主词条权重" in entry_type:
-                    cost = re.search(r"C(\d+)主词条权重", entry_type).group(1)  # type: ignore
-                    pros_temp = main_props.get(str(cost))
-                else:
-                    pros_temp = sub_pros
+        if weight_modals:
+            weight_temps = [
+                (
+                    get_calc_map(calc.phantom_card, role_detail.role.roleName, role_detail.role.roleId, opt["key"]),
+                    opt["name"],
+                )
+                for opt in weight_modals
+            ]
+        else:
+            weight_temps = [(calc.calc_temp, "")]
 
-                if entry == "普攻伤害加成":
-                    value = pros_temp.get("技能伤害加成", 0) * skill_weight[0]
-                elif entry == "重击伤害加成":
-                    value = pros_temp.get("技能伤害加成", 0) * skill_weight[1]
-                elif entry == "共鸣技能伤害加成":
-                    value = pros_temp.get("技能伤害加成", 0) * skill_weight[2]
-                elif entry == "共鸣解放伤害加成":
-                    value = pros_temp.get("技能伤害加成", 0) * skill_weight[3]
-                else:
-                    value = pros_temp.get(entry, 0)
-
-                if value == 0:
-                    value = "-"
-                else:
-                    value = f"{value:.3f}"
-                entry_list.append(value)
-            weight_list_temp[i] = ",".join(entry_list)
-
-        introduce_temp = await draw_weight(introduce_temp, role_detail.role.roleName, weight_list_temp, calc.calc_temp)
+        for ti, (ct, modal_name) in enumerate(weight_temps):
+            weight_rows = _build_weight_rows(ct, shuxing)
+            weight_table = Image.new("RGBA", (1500, 880), (0, 0, 0, 0))
+            weight_table = await draw_weight(weight_table, role_detail.role.roleName, weight_rows, ct, modal_name)
+            img.alpha_composite(weight_table, (0, weight_base_y + ti * weight_block_h))
 
     char_bg = Image.open(TEXT_PATH / "char.png")
     img.paste(char_bg, (1100, 220), char_bg)
     img.paste(phantom_temp, (0, 1050), phantom_temp)
     img.paste(right_image_temp, (605, 225), right_image_temp)
-    img.alpha_composite(introduce_temp, (0, 2400))
 
     img = add_footer(img)
     img = await convert_img(img)
@@ -1723,9 +1706,10 @@ def _wrap_plain(text: str, cjk_chars: int) -> List[str]:
     return [text[i:i + cjk_chars] for i in range(0, len(text), cjk_chars)]
 
 
-async def draw_char_optimize_img(ev: Event, uid: str, char: str, user_id: str, waves_id: Optional[str] = None, change_list_regex: Optional[str] = None):
+async def draw_char_optimize_img(ev: Event, uid: str, char: str, user_id: str, waves_id: Optional[str] = None, change_list_regex: Optional[str] = None, is_limit_query=False):
     """综合评分优化建议图: 复用无评分面板布局, 仅替换声骸评分槽/声骸卡和底部说明行.
-    支持替换指令(换角色X链/换声骸…), 优化结果基于替换后的配置."""
+    支持替换指令(换角色X链/换声骸…), 优化结果基于替换后的配置.
+    is_limit_query=True 时基于角色极限面板出优化建议, 不读账号/CK."""
     locale = await WavesLangSettings.get_lang(ev.user_id)
     user_pref = await get_hide_uid_pref(waves_id or uid, user_id, ev.bot_id)
 
@@ -1750,20 +1734,36 @@ async def draw_char_optimize_img(ev: Event, uid: str, char: str, user_id: str, w
     if waves_id:
         uid = waves_id
 
-    info, ck, _ = await base_info_cache.load_account_context(
-        uid, user_id, ev.bot_id, force_ck=bool(waves_id)
-    )
-    if isinstance(info, str):
-        # ck 也失败 → 返错误; ck 有效但 baseinfo 失败 → 降级出图
-        if not ck:
-            return info
-        account_info = None
+    ck = ""
+    force_resource_id = None
+    if not is_limit_query:
+        info, ck, _ = await base_info_cache.load_account_context(
+            uid, user_id, ev.bot_id, force_ck=bool(waves_id)
+        )
+        if isinstance(info, str):
+            # ck 也失败 → 返错误; ck 有效但 baseinfo 失败 → 降级出图
+            if not ck:
+                return info
+            account_info = None
+        else:
+            account_info = info
     else:
-        account_info = info
+        account_info = AccountBaseInfo.model_validate(
+            {
+                "name": "库洛交个朋友",
+                "id": uid,
+                "level": 100,
+                "worldLevel": 10,
+                "creatTime": 1739375719,
+            }
+        )
+        force_resource_id = char_id
 
     # ── 获取数据 ─────────────────────────────────────────────────────────
     avatar, role_detail = await get_role_need(
-        ev, char_id, ck, uid, char_name, waves_id, change_list_regex=change_list_regex
+        ev, char_id, ck, uid, char_name, waves_id,
+        force_resource_id=force_resource_id, is_limit_query=is_limit_query,
+        change_list_regex=change_list_regex,
     )
     if isinstance(role_detail, str):
         return role_detail
@@ -2162,8 +2162,49 @@ async def draw_char_optimize_img(ev: Event, uid: str, char: str, user_id: str, w
 
 
 
+def _build_weight_rows(calc_temp, shuxing):
+    weight_list_temp = weight_list.copy()
+    entry_type_list = weight_list_temp[0].split(",")[1:]
+    main_props = calc_temp["main_props"]
+    sub_pros = calc_temp["sub_props"]
+    skill_weight = calc_temp["skill_weight"]
+    for i, entry in enumerate(weight_list_temp[1:], start=1):
+        entry_list = []
+        if entry == "属性伤害加成":
+            entry_list.append(f"{shuxing}")
+        elif "%" in entry:
+            entry_list.append(entry.replace("%", "百分比"))
+        else:
+            entry_list.append(entry)
+        for entry_type in entry_type_list:
+            if "主词条权重" in entry_type:
+                cost = re.search(r"C(\d+)主词条权重", entry_type).group(1)  # type: ignore
+                pros_temp = main_props.get(str(cost))
+            else:
+                pros_temp = sub_pros
+
+            if entry == "普攻伤害加成":
+                value = pros_temp.get("技能伤害加成", 0) * skill_weight[0]
+            elif entry == "重击伤害加成":
+                value = pros_temp.get("技能伤害加成", 0) * skill_weight[1]
+            elif entry == "共鸣技能伤害加成":
+                value = pros_temp.get("技能伤害加成", 0) * skill_weight[2]
+            elif entry == "共鸣解放伤害加成":
+                value = pros_temp.get("技能伤害加成", 0) * skill_weight[3]
+            else:
+                value = pros_temp.get(entry, 0)
+
+            if value == 0:
+                value = "-"
+            else:
+                value = f"{value:.3f}"
+            entry_list.append(value)
+        weight_list_temp[i] = ",".join(entry_list)
+    return weight_list_temp
+
+
 @to_thread
-def draw_weight(image, role_name, weight_list_temp, calc_temp):
+def draw_weight(image, role_name, weight_list_temp, calc_temp, modal_name=""):
     draw = ImageDraw.Draw(image)
     draw.rectangle([10, 10, 1490, 870], fill=(0, 0, 0, int(0.7 * 255)))
 
@@ -2206,6 +2247,8 @@ def draw_weight(image, role_name, weight_list_temp, calc_temp):
 
     # 添加标题
     title = f"#{role_name}词条权重表"
+    if modal_name:
+        title = f"#{role_name}（{modal_name}）词条权重表"
     draw_text_with_fallback(draw, (start_x, 20), title, font=waves_font_36, fill=SPECIAL_GOLD)
 
     # 添加其他

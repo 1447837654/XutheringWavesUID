@@ -25,6 +25,7 @@ from ..utils.queues.queues import push_item
 from ..utils.resource.RESOURCE_PATH import PLAYER_PATH, MATRIX_PATH, waves_templates
 from ..utils.image import pil_to_b64, get_waves_bg, get_event_avatar, CHAIN_COLOR
 from ._colors import get_matrix_score_class
+from .period import get_matrix_period_number
 from .draw_matrix_card_pil import (
     draw_matrix_index_img as draw_matrix_index_img_pil,
     draw_matrix_detail_img as draw_matrix_detail_img_pil,
@@ -159,7 +160,10 @@ async def upload_matrix_record(
     matrix_data: MatrixDetail,
     char_ids_map: dict,
     sender_avatar: str = "",
+    user_id: str = "",
+    bot_id: str = "",
 ):
+    from ..utils.util import resolve_hide_uid
     WavesToken = WutheringWavesConfig.get_config("WavesToken").data
     if not WavesToken:
         return
@@ -205,6 +209,7 @@ async def upload_matrix_record(
         teamCount=len(mode.teams),
         teams=teams,
         sender_avatar=sender_avatar,
+        hide_uid=await resolve_hide_uid(waves_id, user_id, bot_id),
     )
     push_item(QUEUE_MATRIX_RECORD, matrix_item.model_dump())
 
@@ -283,7 +288,7 @@ async def draw_matrix_img(ev: Event, uid: str, user_id: str) -> Union[bytes, str
 
     if isinstance(result, bytes):
         await save_matrix_record(uid, matrix_detail, char_ids_map)
-        await upload_matrix_record(is_self_ck, uid, matrix_detail, char_ids_map, sender_avatar)
+        await upload_matrix_record(is_self_ck, uid, matrix_detail, char_ids_map, sender_avatar, user_id, ev.bot_id)
     return result
 
 
@@ -314,6 +319,7 @@ async def _get_common_context(ev: Event, uid: str, user_id: str, ck: str) -> Uni
         "avatar_url": avatar_url,
         "bg_url": bg_url,
         "current_date": current_date,
+        "period": get_matrix_period_number(),
         "footer_b64": get_footer_b64(footer_type="white") or "",
     }
 

@@ -1,6 +1,7 @@
 import re
 import json
 import asyncio
+import contextlib
 from typing import Dict, List, Union, Optional
 
 import aiofiles
@@ -10,7 +11,7 @@ from gsuid_core.models import Event
 
 from .hint import error_reply
 from .at_help import safe_sender_avatar
-from .util import get_version, hide_uid
+from .util import get_version, hide_uid, resolve_hide_uid
 from .api.model import RoleList, AccountBaseInfo, OwnedRoleInfoResponse
 from .waves_api import waves_api
 from .resource.constant import SPECIAL_CHAR_INT_ALL
@@ -25,6 +26,43 @@ from .char_state import record_refresh_batch
 from .api.model import AccountBaseInfo as _AccountBaseInfo
 
 _BG_TASKS: set = set()
+_refresh_locks: dict[tuple[str, str], asyncio.Lock] = {}
+
+
+@contextlib.asynccontextmanager
+async def refresh_lock(uid: str, scope: str):
+    lock = _refresh_locks.setdefault((uid, scope), asyncio.Lock())
+    async with lock:
+        yield
+
+
+def schedule_silent_diff_refresh(
+    ev: Event,
+    uid: str,
+    user_id: str,
+    ck: str,
+    is_self_ck: bool,
+    is_self: bool,
+    role_ids: List[int],
+):
+    """后台静默补全本地缺失角色面板, 走正常保存+上传链路"""
+
+    async def _silent_refresh():
+        try:
+            async with refresh_lock(uid, "single"):
+                await refresh_char(
+                    ev, uid, user_id, ck=ck,
+                    is_self_ck=is_self_ck,
+                    refresh_type=[str(rid) for rid in role_ids],
+                    is_self=is_self,
+                    is_silent_diff=True,
+                )
+        except Exception as e:
+            logger.warning(f"[鸣潮·角色状态] 静默补全刷新失败 uid={uid}: {e}")
+
+    task = asyncio.create_task(_silent_refresh())
+    _BG_TASKS.add(task)
+    task.add_done_callback(_BG_TASKS.discard)
 
 
 async def save_base_info_cache(uid: str, account_info: _AccountBaseInfo):
@@ -116,6 +154,7 @@ async def send_card(
     role_info: Optional[RoleList] = None,
     waves_data: Optional[List] = None,
     sender_avatar: str = "",
+    bot_id: str = "",
 ):
     WavesToken = WutheringWavesConfig.get_config("WavesToken").data
     if not WavesToken:
@@ -141,6 +180,8 @@ async def send_card(
         )
         return
 
+    hide_uid_flag = await resolve_hide_uid(uid, user_id, bot_id)
+
     def _build_meta(rank):
         meta = {
             "user_id": user_id,
@@ -152,6 +193,7 @@ async def send_card(
             "char_info": [r.to_rank_dict() for r in rank],
             "role_num": account_info.roleNum,
             "single_refresh": 1 if len(waves_data) == 1 else 0,
+            "hide_uid": hide_uid_flag,
         }
         if sender_avatar:
             meta["sender_avatar"] = sender_avatar
@@ -191,6 +233,7 @@ async def save_card_info(
     role_info: Optional[RoleList] = None,
     sender_avatar: str = "",
     is_self: bool = True,
+    bot_id: str = "",
 ):
     if len(waves_data) == 0:
         return
@@ -240,7 +283,7 @@ async def save_card_info(
         except Exception as e:
             logger.warning(f"[鸣潮·角色状态] refresh 状态记录失败 uid={uid}: {e}")
 
-    await send_card(uid, user_id, save_data, is_self_ck, token, role_info, waves_data, sender_avatar)
+    await send_card(uid, user_id, save_data, is_self_ck, token, role_info, waves_data, sender_avatar, bot_id)
 
     try:
         # 移除所有 URL 后再保存
@@ -359,6 +402,7 @@ async def refresh_char(
     is_self_ck: bool = False,
     refresh_type: Union[str, List[str]] = "all",
     is_self: bool = True,
+    is_silent_diff: bool = False,
 ) -> Union[str, List]:
     waves_datas = []
     if not ck:
@@ -387,7 +431,8 @@ async def refresh_char(
         elif str(refresh_type).isdigit():
             request_role_ids = [int(refresh_type)]
 
-    if request_role_ids:
+    silent_diff_ids: List[int] = []
+    if request_role_ids and not is_silent_diff:
         local_roles = await get_all_roleid_detail_info_int(uid)
         has_local_role = bool(local_roles and any(rid in local_roles for rid in request_role_ids))
         if not has_local_role and is_self_ck:
@@ -396,7 +441,18 @@ async def refresh_char(
                 return owned_role_info.throw_msg()
             owned_role_info = OwnedRoleInfoResponse.model_validate(owned_role_info.data)
             owned_role_ids = {r.roleId for r in owned_role_info.roleInfoList}
+            local_role_ids = set(local_roles) if local_roles else set()
+            silent_diff_ids = [
+                rid for rid in owned_role_ids
+                if rid not in local_role_ids
+                and rid not in request_role_ids
+                and rid not in SPECIAL_CHAR_INT_ALL
+            ]
             if not any(rid in owned_role_ids for rid in request_role_ids):
+                if silent_diff_ids:
+                    schedule_silent_diff_refresh(
+                        ev, uid, user_id, ck, is_self_ck, is_self, silent_diff_ids
+                    )
                 return error_reply(code=-110, msg="未拥有该角色，无法刷新面板")
 
     semaphore = await semaphore_manager.get_semaphore()
@@ -506,7 +562,11 @@ async def refresh_char(
         role_info=role_info,
         sender_avatar=sender_avatar,
         is_self=is_self,
+        bot_id=ev.bot_id,
     )
+
+    if silent_diff_ids and waves_datas:
+        schedule_silent_diff_refresh(ev, uid, user_id, ck, is_self_ck, is_self, silent_diff_ids)
 
     if not waves_datas:
         if refresh_type == "all":

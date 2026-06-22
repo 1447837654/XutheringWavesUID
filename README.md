@@ -33,7 +33,7 @@ git clone https://github.com/Loping151/XutheringWavesUID.git
 群友的拓展教程：
 https://blog.ovoii.io/posts/notes/wwbot 
 
-总排行申请、反馈（仅限主人）：群号 387393347（需中转一次，因为被炸过群了，这是一个悲伤的故事）。如**完全**不使用QQ平台（如飞书、Discord等），可发邮件给客服小维 agent@loping151.com（记得写标题避免被小维当成垃圾邮件）申请计算token，要求附带具体使用平台、core信息截图和使用情况和规模说明，支持较少的请求量和用户量，但完全足以小范围使用，一般都欢迎入群。
+总排行申请、反馈（仅限主人）：群号 885617919（入群问题注意大小写）。如**完全**不使用QQ平台（如飞书、Discord等），可发邮件给客服小维 agent@loping151.com（记得写标题避免被小维当成垃圾邮件）申请计算token，要求附带具体使用平台、core信息截图和使用情况和规模说明，支持较少的请求量和用户量，但完全足以小范围使用，一般都欢迎入群。
 
 - 为什么需要申请总排行进行使用：
   
@@ -116,13 +116,13 @@ https://blog.ovoii.io/posts/notes/wwbot
 本仓库仅允许正常、可沟通、具有良知的个体部署，原因：https://ngabbs.com/read.php?tid=45654606 以及：[link](./assets/0428.md)。
 
 ## 支持设备列表：
-win_amd64: python3.10-3.13<br>
+win_amd64: python3.10-3.14<br>
 win_arm64: not yet<br>
-linux_x86_64: python3.10-3.13<br>
-linux_aarch64: python3.10-3.13<br>
-macos_intel: python3.10-3.13<br>
-macos_apple: python3.10-3.13<br>
-android_termux: python3.10-3.13<br>
+linux_x86_64: python3.10-3.14<br>
+linux_aarch64: python3.10-3.14<br>
+macos_intel: python3.10-3.14<br>
+macos_apple: python3.10-3.14<br>
+android_termux: python3.10-3.14<br>
 
 **！本插件所含构建没有任何风险后门！本插件所含构建只读取gsuid_core目录下的文件，只请求非构建部分显示的域名！请随意进行流量检查和读写检查！**
 

@@ -32,6 +32,7 @@ SONATA_MOTTLED = "斑驳粉饰之沫"
 SONATA_WHISPER = "听唤语义之愿"
 SONATA_SNOWFALL = "雪落无声之愿"
 SONATA_HEARTCUT = "剪心辑梦之影"
+SONATA_NIGHTMARE = "碎梦亡鬼之魇"
 
 CHAR_ATTR_FREEZING = "冷凝"
 CHAR_ATTR_CELESTIAL = "衍射"
@@ -113,10 +114,10 @@ Havoc_Bane_Role_Ids = [1508]
 Fusion_Burst_Role_Ids = [1210, 1211]
 
 # 霜渐效应
-Glacio_Chafe_Role_Ids = [1108]
+Glacio_Chafe_Role_Ids = [1108, 1109]
 
-# 失序彼岸之梦 套装
-Ancient_Role_Ids = [1608]
+# 失序彼岸之梦 套装 (共鸣能量上限为0的角色: 弗洛洛 / 洛瑟菈)
+Ancient_Role_Ids = [1608, 1109]
 
 # 偏谐值累积效率 角色
 Offtune_Buildup_Role_Ids = [1209]
@@ -125,7 +126,10 @@ Offtune_Buildup_Role_Ids = [1209]
 Tune_Rupture_Role_Ids = [1509, 1210]
 
 # 附加集谐·偏移 角色
-Tune_Strain_Role_Ids = [1509, 1211]
+Tune_Strain_Role_Ids = [1509, 1211, 1510]
+
+# 附加骇破·偏移 角色
+Hack_Shifting_Role_Ids = [1308, 1511]
 
 # 异常
 AbnormalType = Literal[
@@ -154,7 +158,13 @@ def skill_damage_calc(skillTree: Optional[Dict], skillTreeId: str, skillParamId:
     """
     if skillTree is None:
         raise ValueError("技能树数据不能为空")
-    return skillTree[skillTreeId]["skill"]["level"][skillParamId]["param"][0][skillLevel]
+    level = skillTree[skillTreeId]["skill"]["level"]
+    if skillParamId not in level:
+        if skillParamId.endswith("伤害"):
+            skillParamId = skillParamId[:-2]
+        else:
+            skillParamId = f"{skillParamId}伤害"
+    return level[skillParamId]["param"][0][skillLevel]
 
 
 def parse_skill_multi(temp):

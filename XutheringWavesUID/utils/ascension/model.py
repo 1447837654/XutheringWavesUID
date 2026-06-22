@@ -85,7 +85,6 @@ class CharacterModel(BaseModel):
         # Updated configuration keys for Pydantic v2
         populate_by_name = True  # Replaces `allow_population_by_field_name`
         str_strip_whitespace = True  # Replaces `anystr_strip_whitespace`
-        str_min_length = 1  # Replaces `min_anystr_length`
 
     def get_max_level_stat(self) -> Stats:
         return self.stats["6"]["90"]
@@ -169,6 +168,7 @@ class EchoModel(BaseModel):
     intensityCode: int
     group: Dict[str, Dict[str, str]]
     skill: Dict[str, Any]
+    resistance: Dict[str, float] = Field(default_factory=dict)
 
     class Config:
         populate_by_name = True
@@ -177,6 +177,20 @@ class EchoModel(BaseModel):
 
     def get_skill_detail(self):
         return format_with_defaults(self.skill["desc"], self.skill["params"][-1])
+
+    def get_resistance(self) -> List[Dict[str, Any]]:
+        """声骸(怪物)抗性 → [{name, value, hi}]; 高于基础 10 的标记 hi; 无数据返回 []。"""
+        name_map = [
+            ("phys", "物理"), ("glacio", "冷凝"), ("fusion", "热熔"),
+            ("electro", "导电"), ("aero", "气动"), ("spectro", "衍射"), ("havoc", "湮灭"),
+        ]
+        result = []
+        for key, name in name_map:
+            if key in self.resistance:
+                v = self.resistance[key]
+                val = int(v) if float(v).is_integer() else v
+                result.append({"key": key, "name": name, "value": f"{val}%", "hi": v > 10})
+        return result
 
     def get_intensity(self) -> List[Tuple[str, str]]:
         temp_cost = {0: "c1", 1: "c3", 2: "c4", 3: "c4"}

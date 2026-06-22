@@ -223,6 +223,29 @@ def hide_uid(uid, user_pref: str = "") -> str:
     return uid_str[:2] + "*" * 4 + uid_str[-2:]
 
 
+async def resolve_hide_uid(uid, user_id: str, bot_id: str):
+    pref = await get_hide_uid_pref(uid, user_id, bot_id)
+    if pref == "on":
+        return True
+    if pref == "off":
+        return False
+    return None
+
+
+async def build_uid_masker(pairs, bot_id: str):
+    """pairs: (uid, user_id) 序列; 返回同步 mask(uid, user_id), 按各自本地 pref 打码。"""
+    prefs = {}
+    for uid, user_id in pairs:
+        key = (user_id, uid)
+        if key not in prefs:
+            prefs[key] = await get_hide_uid_pref(uid, user_id, bot_id)
+
+    def mask(uid, user_id) -> str:
+        return hide_uid(uid, user_pref=prefs.get((user_id, uid), ""))
+
+    return mask
+
+
 def clean_tags(text: str) -> str:
     """清理文本中的XML/HTML标签（如<color>等）"""
     text = re.sub(r"<color[^>]*>", "", text)
@@ -287,8 +310,7 @@ filter_msg = [
 
 
 # 发送主人信息
-@timed_async_cache(300, lambda x: x)
-async def send_master_info(msg: str):
+async def _send_master_info_impl(msg: str):
     # 过滤
     for i in filter_msg:
         if i in msg:
@@ -297,10 +319,20 @@ async def send_master_info(msg: str):
     subscribes = await gs_subscribe.get_subscribe("联系主人")
     if not subscribes:
         return
-    if subscribes:
-        for sub in subscribes:
-            await sub.send(f"【联系主人】：{msg}")
-        return True
+    for sub in subscribes:
+        await sub.send(f"【联系主人】：{msg}")
+    return True
+
+
+@timed_async_cache(300, lambda x: x)
+async def send_master_info(msg: str):
+    return await _send_master_info_impl(msg)
+
+
+# 系统维护提示 cd 单独加长(1小时), 避免维护期间频繁打扰主人
+@timed_async_cache(3600, lambda x: x)
+async def send_master_info_maintenance(msg: str):
+    return await _send_master_info_impl(msg)
 
 
 def login_platform() -> str:

@@ -42,6 +42,7 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
             "小沐XMu",
             "吃我无痕",
             "巡游天国FM",
+            "猫眼石攻略组",
             "社区攻略",
         ],
     ),
@@ -217,6 +218,11 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
         "开启后, 无权限的用户使用上传面板图指令时, 若附带了图片, 会通过【联系主人】订阅转发给主人, 由主人审核后用上传指令落地",
         False,
     ),
+    "WavesUploadAuditKeepLocal": GsBoolConfig(
+        "上传审核面板图储存本地",
+        "开启后, 转交主人审核的图片会在本地储存一份(位于 panel_edit_tmp/pending), 可在网页面板图编辑器的【待审核】中查看/裁剪上传/删除。注意会占用本地磁盘空间, 并且存在恶意上传风险, 建议磁盘空间充足再开启",
+        False,
+    ),
     "AutoSendCharAfterRefresh": GsBoolConfig(
         "刷新面板时自动发送角色面板",
         "全量刷新面板后，自动猜测用户可能想查看的角色面板",
@@ -260,11 +266,6 @@ CONFIG_DEFAULT: Dict[str, GSC] = {
         "外置渲染服务的API地址，例如：http://127.0.0.1:3000/render",
         "http://127.0.0.1:3000/render",
         secret=True,
-    ),
-    "BotColorMap": GsStrConfig(
-        "排行榜Bot名称固定颜色",
-        "格式: 名称-(R,G,B)，颜色为RGB值(0-255)，多个用逗号分隔，如: 小维-(234,183,4),千咲-(0,128,255)",
-        "",
     ),
     "EnableLocalization": GsBoolConfig(
         "启用多语言本地化",

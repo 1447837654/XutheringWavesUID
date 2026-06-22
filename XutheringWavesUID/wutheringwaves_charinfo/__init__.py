@@ -384,6 +384,17 @@ async def _forward_upload_to_master(bot: Bot, ev: Event):
                 f"[鸣潮]【{char_name}】{prefix_msg}全部疑似重复: {'；'.join(block_msgs)}，已拒绝转交主人审核"
             )
 
+        if WutheringWavesConfig.get_config("WavesUploadAuditKeepLocal").data:
+            try:
+                from ..wutheringwaves_resource.panel_editor import storage as _pe_st
+                for b in image_bytes:
+                    _pe_st.save_pending(
+                        target_type, char_id, b,
+                        user_id=ev.user_id, group_id=ev.group_id,
+                    )
+            except Exception as e:
+                logger.warning(f"[鸣潮·上传审核] 储存待审核图失败: {e}")
+
         subs = await gs_subscribe.get_subscribe("联系主人")
         logger.info(f"[鸣潮·上传审核] 取到 {len(subs) if subs else 0} 个主人订阅")
         if not subs:
@@ -457,7 +468,7 @@ async def _forward_upload_to_master(bot: Bot, ev: Event):
         "mb",
     ),
     block=True,
-    to_ai="""从米游社/库街区**强制刷新**全部角色面板数据。
+    to_ai="""从库街区**强制刷新**全部角色面板数据。
 
 ⚠️ 这是有 API 调用副作用的写操作（会更新本地数据库）。当用户问「刷新面板 / 更新面板 / 强制刷新」时调用。
 需绑定 cookie。完成后会自动展示更新最大的角色面板。
@@ -834,13 +845,30 @@ async def send_char_optimize_msg(bot: Bot, ev: Event):
         return
     if waves_id and is_intl_uid(waves_id):
         return await bot.send(intl_unavailable_msg(waves_id))
+
+    is_limit_query = False
+    if isinstance(char, str) and ("极限" in char or "limit" in char):
+        is_limit_query = True
+        char = char.replace("极限", "").replace("limit", "")
     if not char:
         return
     res = resolve_char(char)
     if not res.ok:
         return await bot.send(res.fail_msg())
     char = res.matched
-    canonical_cmd = f"{PREFIX}{char}优化{change_list_regex or ''}"
+    body = f"极限{char}" if is_limit_query else char
+    canonical_cmd = f"{PREFIX}{body}优化{change_list_regex or ''}"
+
+    if is_limit_query:
+        im = await draw_char_optimize_img(ev, "1", char, ev.user_id, change_list_regex=change_list_regex, is_limit_query=True)
+        at_sender = False
+        if isinstance(im, str) and ev.group_id:
+            at_sender = True
+        if isinstance(im, str):
+            return await bot.send(res.with_tip(im, canonical_cmd), at_sender)
+        if isinstance(im, bytes):
+            return await bot.send(res.wrap(im, canonical_cmd), at_sender)
+        return
 
     _ru = await _resolve_self_uid(bot, ev)
     if _ru is None:
