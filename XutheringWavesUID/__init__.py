@@ -1,20 +1,24 @@
 """init"""
 
-import re
-import time
 import asyncio
-import shutil
-from pathlib import Path
 
 from gsuid_core.sv import SL, Plugins
 from gsuid_core.logger import logger
 from gsuid_core.server import on_core_shutdown
-from gsuid_core.data_store import get_res_path
 
 # 幂等: 防止跨插件 cross-import 让本文件在新 namespace 下重 exec 时
 # 把 disable_force_prefix 用默认值 False 覆盖掉。
 if "XutheringWavesUID" not in SL.plugins:
     Plugins(name="XutheringWavesUID", force_prefix=["ww"], allow_empty_prefix=False)
+
+# 迁移遗留: 旧版锁文件落在仓库树内, 删掉; 过期后可整段注释
+from .utils.resource.RESOURCE_PATH import BUILD_ROOT
+_legacy_lock = BUILD_ROOT / ".build_copy.lock"
+if _legacy_lock.exists():
+    try:
+        _legacy_lock.unlink()
+    except OSError:
+        pass
 
 # 扩展(.pyd/.so)被 import 前先落盘新构建; Windows 下 .pyd 加载后锁定无法替换
 from .utils.download_utils import copy_build_files
@@ -31,6 +35,7 @@ from .utils.bot_send_hook import install_bot_hooks
 from .utils.database.models import WavesUser
 from .utils.database.waves_subscribe import WavesSubscribe
 from .utils.database.waves_user_activity import WavesUserActivity
+from .utils.database.waves_group_activity import WavesGroupActivity, ANN_PUSH_GUARD
 from .utils.database.waves_user_sdk import WavesUserSdk  # noqa: F401
 from .utils.plugin_checker import is_from_waves_plugin
 
@@ -38,26 +43,36 @@ from .utils.plugin_checker import is_from_waves_plugin
 # 内存中暂存活跃度记录，定时批量写入，避免高并发写入损坏数据库
 # value: (user_id, bot_id, bot_self_id, sender_avatar)
 _activity_buffer: dict[str, tuple[str, str, str, str]] = {}
+# 群活跃度缓冲 value: (group_id, bot_id, bot_self_id)
+_group_activity_buffer: dict[str, tuple[str, str, str]] = {}
 _FLUSH_INTERVAL = 60  # 秒
 
 
 async def _flush_activity_buffer():
     """将缓冲区中的活跃度记录批量写入数据库"""
-    if not _activity_buffer:
-        return
-    pending = dict(_activity_buffer)
-    _activity_buffer.clear()
+    if _activity_buffer:
+        pending = dict(_activity_buffer)
+        _activity_buffer.clear()
 
-    for key, (user_id, bot_id, bot_self_id, sender_avatar) in pending.items():
-        try:
-            await WavesUserActivity.update_user_activity(user_id, bot_id, bot_self_id)
-        except Exception as e:
-            logger.warning(f"[鸣潮·插件] 批量活跃度写入失败: {e}")
-        if sender_avatar:
+        for key, (user_id, bot_id, bot_self_id, sender_avatar) in pending.items():
             try:
-                await WavesUser.update_avatar_url(user_id, bot_id, sender_avatar)
+                await WavesUserActivity.update_user_activity(user_id, bot_id, bot_self_id)
             except Exception as e:
-                logger.warning(f"[鸣潮·插件] 头像更新失败: {e}")
+                logger.warning(f"[鸣潮·插件] 批量活跃度写入失败: {e}")
+            if sender_avatar:
+                try:
+                    await WavesUser.update_avatar_url(user_id, bot_id, sender_avatar)
+                except Exception as e:
+                    logger.warning(f"[鸣潮·插件] 头像更新失败: {e}")
+
+    if _group_activity_buffer:
+        group_pending = dict(_group_activity_buffer)
+        _group_activity_buffer.clear()
+        for key, (group_id, bot_id, bot_self_id) in group_pending.items():
+            try:
+                await WavesGroupActivity.update_group_activity(group_id, bot_id, bot_self_id)
+            except Exception as e:
+                logger.warning(f"[鸣潮·插件] 批量群活跃度写入失败: {e}")
 
 
 _shutdown_event = asyncio.Event()
@@ -117,6 +132,8 @@ async def waves_user_activity_hook(
     只记录由本插件触发的消息的用户活跃度
     写入内存缓冲区，由后台任务定时批量写入数据库
     """
+    if ANN_PUSH_GUARD.get():
+        return
     if not is_from_waves_plugin():
         return
 
@@ -131,11 +148,26 @@ async def waves_user_activity_hook(
             sender_avatar = existing[3]
     _activity_buffer[key] = (user_id, bot_id, bot_self_id, sender_avatar)
 
+# 注册群活跃度 hook
+async def waves_group_activity_hook(group_id: str, bot_id: str, bot_self_id: str):
+    if ANN_PUSH_GUARD.get():
+        return
+    if not is_from_waves_plugin():
+        return
+    if not group_id:
+        return
+    _group_activity_buffer[f"{group_id}:{bot_id}:{bot_self_id}"] = (group_id, bot_id, bot_self_id)
+
 # 安装 hooks 并注册
 install_bot_hooks()
-from .utils.bot_send_hook import register_target_send_hook, register_user_activity_hook
+from .utils.bot_send_hook import (
+    register_target_send_hook,
+    register_user_activity_hook,
+    register_group_activity_hook,
+)
 register_target_send_hook(waves_bot_check_hook)
 register_user_activity_hook(waves_user_activity_hook)
+register_group_activity_hook(waves_group_activity_hook)
 
 logger.debug("[鸣潮·插件] Bot 消息发送 hook 已注册")
 logger.debug("[鸣潮·插件] 用户活跃度 hook 已注册")
@@ -163,31 +195,33 @@ if _old_login_cache.exists():
         logger.warning(f"[鸣潮·插件] 删除旧的 login_cache.db 失败: {_e}")
 
 # 修正: API曾错误地将陆·赫斯的resourceType标记为武器
-import json as _json
-from .utils.resource.RESOURCE_PATH import PLAYER_PATH as _PLAYER_PATH
-_fix_flag = _PLAYER_PATH / ".fix_hesi_done"
-if not _fix_flag.exists():
-    _fix_count = 0
-    for _uid_dir in _PLAYER_PATH.iterdir():
-        _gl = _uid_dir / "gacha_logs.json"
-        if not _gl.is_file():
-            continue
-        try:
-            _raw = _json.loads(_gl.read_text("utf-8"))
-            _modified = False
-            for _records in _raw.get("data", {}).values():
-                for _r in _records:
-                    if "赫斯" in _r.get("name", "") and _r.get("resourceType") == "武器":
-                        _r["resourceType"] = "角色"
-                        _modified = True
-            if _modified:
-                _gl.write_text(_json.dumps(_raw, ensure_ascii=False), "utf-8")
-                _fix_count += 1
-        except Exception:
-            continue
-    _fix_flag.write_text(f"fixed {_fix_count} players")
-    if _fix_count:
-        logger.info(f"[鸣潮·插件] 已修正 {_fix_count} 个玩家的赫斯 resourceType: 武器->角色")
+# from .utils.resource.RESOURCE_PATH import PLAYER_PATH as _PLAYER_PATH
+# from .utils.player_store import read_player_json_sync, write_player_json_sync, player_json_exists
+# _fix_flag = _PLAYER_PATH / ".fix_hesi_done"
+# if not _fix_flag.exists():
+#     _fix_count = 0
+#     for _uid_dir in _PLAYER_PATH.iterdir():
+#         _gl = _uid_dir / "gacha_logs.json"
+#         if not player_json_exists(_gl):
+#             continue
+#         try:
+#             _raw = read_player_json_sync(_gl)
+#             if not _raw:
+#                 continue
+#             _modified = False
+#             for _records in _raw.get("data", {}).values():
+#                 for _r in _records:
+#                     if "赫斯" in _r.get("name", "") and _r.get("resourceType") == "武器":
+#                         _r["resourceType"] = "角色"
+#                         _modified = True
+#             if _modified:
+#                 write_player_json_sync(_gl, _raw)
+#                 _fix_count += 1
+#         except Exception:
+#             continue
+#     _fix_flag.write_text(f"fixed {_fix_count} players")
+#     if _fix_count:
+#         logger.info(f"[鸣潮·插件] 已修正 {_fix_count} 个玩家的赫斯 resourceType: 武器->角色")
 
 # 修正: 仇远calc.json 热熔->气动
 # _calc_1411 = get_res_path() / "XutheringWavesUID" / "resource" / "map" / "character" / "1411" / "calc.json"

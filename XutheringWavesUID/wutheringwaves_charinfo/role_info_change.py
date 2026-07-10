@@ -17,7 +17,7 @@ from ..utils.api.model_other import EnemyDetailData
 from ..utils.char_info_utils import PATTERN, get_all_role_detail_info_list, parse_skill_levels
 from ..utils.ascension.sonata import WavesSonataResult, get_sonata_detail
 from ..utils.ascension.weapon import WavesWeaponResult, get_weapon_detail
-from ..utils.resource.constant import SPECIAL_CHAR, SONATA_FIRST_ID
+from ..utils.resource.constant import SPECIAL_CHAR, SONATA_FIRST_ID, SONATA_FIRST_ID_BY_ROLE
 
 phantom_main_value = [
     {"name": "攻击", "values": ["18%", "30%", "33%"]},
@@ -83,7 +83,7 @@ class ReplaceWeapon:
         self.weaponId: str | None = None  # 武器id
         self.weaponName: str | None = None  # 武器名字
         self.level: str | None = None  # 等级
-        self.resonLevel: str | None = None  # 精炼
+        self.resonLevel: str | None = None  # 谐振
 
 
 class ReplaceSonata:
@@ -167,7 +167,7 @@ def parse_chain(content: str) -> tuple[str, str] | None:
 
 
 def parse_weapon_reson_level(content: str) -> tuple[str, str] | None:
-    pattern = r"(?:(精炼|谐振|精|谐|振)[1-5一二三四五满]|[1-5一二三四五满](精炼|谐振|精|谐|振))"
+    pattern = r"(?:(精炼|谐振|阶|精|谐|振)[1-5一二三四五满]|[1-5一二三四五满](精炼|谐振|阶|精|谐|振))"
     match = re.search(pattern, content)
     if match:
         matched_string = match.group(0)
@@ -735,9 +735,13 @@ async def change_role_detail(
                 if index >= len(sonata_results):
                     break
                 ep.fetterDetail.name = sonata_results[index].name
-                if index == 0 and ep.phantomProp.phantomId not in SONATA_FIRST_ID.get(sonata_results[index].name, []):
-                    ep.phantomProp.phantomId = SONATA_FIRST_ID.get(sonata_results[index].name, [])[0]
-                    ep.phantomProp.name = easy_id_to_name(str(ep.phantomProp.phantomId), ep.phantomProp.name)
+                if index == 0:
+                    sonata_name = sonata_results[index].name
+                    valid_first = SONATA_FIRST_ID.get(sonata_name, [])
+                    if valid_first and ep.phantomProp.phantomId not in valid_first:
+                        role_first = SONATA_FIRST_ID_BY_ROLE.get(sonata_name, {})
+                        ep.phantomProp.phantomId = role_first.get(role_detail.role.roleId, valid_first[0])
+                        ep.phantomProp.name = easy_id_to_name(str(ep.phantomProp.phantomId), ep.phantomProp.name)
 
     # 敌人
     if parserResult.enemy.enemyResistance:

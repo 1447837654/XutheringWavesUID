@@ -485,7 +485,7 @@ async def send_card_info(bot: Bot, ev: Event):
         return
     uid, user_id = _ru
 
-    from .draw_refresh_char_card import draw_refresh_char_detail_img
+    from .draw_refresh_char_card import display_char_name, draw_refresh_char_detail_img
 
     buttons = []
     msg, num_updated, top_improver = await draw_refresh_char_detail_img(bot, ev, user_id, uid, buttons)
@@ -497,7 +497,7 @@ async def send_card_info(bot: Bot, ev: Event):
         and isinstance(msg, bytes)
         and WutheringWavesConfig.get_config("AutoSendCharAfterRefresh").data
     ):
-        char_name = top_improver["roleName"]
+        char_name = display_char_name(top_improver["roleId"], top_improver["roleName"])
         delta = top_improver["delta"]
         old_score = top_improver["old"]
         new_score = top_improver["new"]
@@ -541,6 +541,12 @@ async def send_one_char_detail_msg(bot: Bot, ev: Event):
 
     from .draw_refresh_char_card import draw_refresh_char_detail_img
 
+    refresh_behavior = WutheringWavesConfig.get_config("RefreshSingleCharBehavior").data
+    old_detail = None
+    if refresh_behavior == "concat_diff":
+        from ..utils.char_info_utils import get_char_detail_for_id
+        old_detail = await get_char_detail_for_id(uid, char_id)
+
     buttons = []
     msg, num_updated, _top_improver = await draw_refresh_char_detail_img(bot, ev, user_id, uid, buttons, refresh_type)
 
@@ -550,7 +556,6 @@ async def send_one_char_detail_msg(bot: Bot, ev: Event):
             await bot.send_option(_with_tip(seg, tip), buttons)
         return
 
-    refresh_behavior = WutheringWavesConfig.get_config("RefreshSingleCharBehavior").data
     refresh_seg = MessageSegment.image(msg)
 
     if refresh_behavior == "refresh_only":
@@ -561,6 +566,22 @@ async def send_one_char_detail_msg(bot: Bot, ev: Event):
         await bot.send(_with_tip(refresh_seg, tip))
         im = await draw_char_detail_img(ev, uid, char, user_id, None)
         await bot.send(_append_advice(ev, im))
+        return
+
+    if refresh_behavior == "concat_diff":
+        new_im = await draw_char_detail_img(ev, uid, char, user_id, None, need_convert_img=False)
+        old_im = None
+        if old_detail is not None and isinstance(new_im, Image.Image):
+            old_im = await draw_char_detail_img(
+                ev, uid, char, user_id, None, need_convert_img=False, role_detail_override=old_detail
+            )
+        if isinstance(old_im, Image.Image) and isinstance(new_im, Image.Image):
+            diff_im = await _concat_pk_images(old_im, new_im)
+            seg = MessageSegment.image(await convert_img(diff_im))
+            await bot.send(_append_advice(ev, _with_tip(seg, tip)))
+            return
+        body = MessageSegment.image(await convert_img(new_im)) if isinstance(new_im, Image.Image) else new_im
+        await bot.send(_append_advice(ev, _with_tip([refresh_seg, body], tip)))
         return
 
     if refresh_behavior == "concatenate":

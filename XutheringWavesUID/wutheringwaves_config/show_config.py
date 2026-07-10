@@ -27,6 +27,19 @@ SHOW_CONIFG: Dict[str, GSC] = {
         "自定义抽卡登录页面HTML文件路径，请自行确保模板格式正确，尤其注意在移动端显示良好",
         str(show_path / "index_cloud.html"),
     ),
+    "LoginIndexTokenHtmlPath": GsStrConfig(
+        "添加Token页面HTML路径，一般不用改，可直接上传",
+        "自定义添加Token页面HTML文件路径，请自行确保模板格式正确",
+        str(show_path / "index_token.html"),
+    ),
+    "LoginIndexTokenHtmlUpload": GsImageConfig(
+        "上传添加Token页面模板（上传格式html）",
+        "",
+        str(show_path / "index_token.html"),
+        str(show_path),
+        "index_token",
+        "html",
+    ),
     "Login404HtmlPath": GsStrConfig(
         "404页面HTML路径，一般不用改，可直接上传",
         "自定义404页面HTML文件路径，请自行确保模板格式正确，尤其注意在移动端显示良好",
@@ -95,10 +108,21 @@ SHOW_CONIFG: Dict[str, GSC] = {
         "card",
         "jpg",
     ),
-    "MrUseBG": GsBoolConfig(
+    "MrUseBG": GsStrConfig(
         "自定义每日使用立绘还是背景",
-        "False为使用立绘，True为使用背景，没有背景时使用立绘，存放在custom_mr_bg内",
-        False,
+        "随机按立绘/背景候选池实际图片数量加权；没有背景时使用立绘，背景存放在custom_mr_bg内",
+        "立绘",
+        ["立绘", "背景", "随机"],
+    ),
+    "MrRandomIncludeOfficialPile": GsBoolConfig(
+        "随机立绘时包含官方立绘",
+        "关闭后，作用域内有custom立绘时随机只从custom选；没有custom时仍回落官方",
+        True,
+    ),
+    "MrRandomIncludeOfficialBg": GsBoolConfig(
+        "随机背景时包含官方背景",
+        "关闭后，作用域内有custom背景时随机只从custom选；没有custom时仍回落官方",
+        True,
     ),
     "HelpBannerBgUpload": GsImageConfig(
         "帮助横幅背景图（建议1545x551）",

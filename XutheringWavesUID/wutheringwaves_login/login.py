@@ -210,6 +210,7 @@ async def page_login_other(bot: Bot, ev: Event, url):
         await send_login(bot, ev, f"{url}/waves/i/{token}")
 
         times = 3
+        ck = did = ""
         try:
             async with timeout(180):
                 while True:
@@ -243,17 +244,19 @@ async def page_login_other(bot: Bot, ev: Event, url):
                     logger.debug(
                         f"[鸣潮·登录] page_login_other 拿到 ck user_id={ev.user_id}"
                     )
-                    waves_user, bind_msg = await add_cookie(ev, data["ck"], data["did"])
-                    if "成功" in bind_msg:
-                        await bot.send((" " if at_sender else "") + bind_msg.rstrip("\n"), at_sender)
-                    if waves_user and isinstance(waves_user, WavesUser):
-                        return await login_success_msg(bot, ev, waves_user)
-                    else:
-                        if "成功" in bind_msg:
-                            return
-                        return await bot.send(bind_msg if bind_msg else msg_error, at_sender=at_sender)
+                    ck, did = data["ck"], data["did"]
+                    break
         except asyncio.TimeoutError:
             return await bot.send("登录超时!", at_sender=at_sender)
+
+    waves_user, bind_msg = await add_cookie(ev, ck, did)
+    if "成功" in bind_msg:
+        await bot.send((" " if at_sender else "") + bind_msg.rstrip("\n"), at_sender)
+    if waves_user and isinstance(waves_user, WavesUser):
+        return await login_success_msg(bot, ev, waves_user)
+    if "成功" in bind_msg:
+        return
+    return await bot.send(bind_msg if bind_msg else msg_error, at_sender=at_sender)
 
 
 async def page_login(bot: Bot, ev: Event):
@@ -361,6 +364,11 @@ async def waves_login_index(auth: str):
         from .cloud_login import render_cloud_login_page
 
         return await render_cloud_login_page(auth, state)
+
+    if isinstance(state, dict) and state.get("flow") == "add_token":
+        from ..wutheringwaves_user.add_token_web import render_add_token_page
+
+        return await render_add_token_page(auth, state)
 
     temp = state
     if temp is None:
