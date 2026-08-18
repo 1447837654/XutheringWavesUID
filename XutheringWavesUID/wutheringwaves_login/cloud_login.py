@@ -114,16 +114,6 @@ async def _login_then_update(bot: Bot, ev: Event, uid: str, record_id: str):
 
 # ===== 指令入口 ===============================================
 async def cloud_login_entry(bot: Bot, ev: Event):
-    from ..utils.waves_build.safety import auth_calc
-
-    # 校验总服务器授权 (WavesToken) 有效性; 无效则不生成登录会话, 避免无效登录
-    if not await asyncio.to_thread(auth_calc):
-        at_sender = True if ev.group_id else False
-        return await bot.send(
-            f"{GAME_TITLE} 云登录需后端处理，请接入总服务器后使用",
-            at_sender=at_sender,
-        )
-
     # 每次抽卡登录都走完整登录流程, 允许为不同 uid 各建一条记录
     # (复用/续期已有记录交给 更新抽卡记录)
     url, is_local = await get_url()
@@ -340,6 +330,8 @@ class CloudLoginRequest(BaseModel):
     auth: str
     phone: str
     code: str
+    # 机房/异常 IP 二次要求滑块时，前端补滑块后带 geetest 重试本接口
+    geetest: Optional[Dict[str, Any]] = None
 
 
 @app.post("/waves/c/sendCode")
@@ -374,7 +366,7 @@ async def waves_cloud_login(data: CloudLoginRequest):
 
     try:
         ok, msg, result = await _cloud_api().do_cloud_login(
-            data.phone, data.code, device_num, did
+            data.phone, data.code, device_num, did, data.geetest
         )
     except Exception as e:
         logger.exception("[鸣潮·云登录] 登录链路异常")
@@ -382,6 +374,11 @@ async def waves_cloud_login(data: CloudLoginRequest):
         state["error_msg"] = f"登录异常：{e}"
         cache.set(data.auth, state)
         return {"success": False, "msg": "登录异常，请稍后重试"}
+
+    # 机房/异常 IP 在 phoneCode 步被风控二次要求滑块：不置 failed，让前端补一次
+    # 滑块后带 geetest 重试本接口（登录会话保持，指令侧继续轮询等待结果）。
+    if msg == _get_cloud_api_module().NEED_GEETEST:
+        return {"success": False, "need_captcha": True, "msg": "请完成滑块验证"}
 
     if not ok or not result:
         state["phase"] = "failed"

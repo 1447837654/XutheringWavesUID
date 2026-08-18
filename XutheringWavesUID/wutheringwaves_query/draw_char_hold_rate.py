@@ -34,6 +34,7 @@ from ..utils.fonts.waves_fonts import (
     waves_font_58,
 )
 from ..utils.resource.constant import (
+    NAME_ALIAS,
     NORMAL_LIST,
     NORMAL_LIST_IDS,
     ATTRIBUTE_ID_MAP,
@@ -157,7 +158,7 @@ def _render_char_hold_rate(
     title_mask_draw.text((300, 430), title_text, "white", waves_font_58, "lm")
 
     # count
-    title = f"样本数量: {data.get('total_player_count', 0)} 人" if group_id else "数据由玩家自愿上传，仅供参考，不代表全体玩家"
+    title = f"样本数量: {data.get('total_player_count', 0)} 人" if group_id else "仅统计90天内活跃，数据仅供参考，不代表全体玩家"
     title_mask_draw.text(
         (300, 500),
         title,
@@ -191,8 +192,9 @@ def _render_char_hold_rate(
         bar_bg_draw = ImageDraw.Draw(bar_bg)
 
         # 角色名字
-        name_text = char_model.name
-        name_text = SPECIAL_CHAR_NAME.get(f"{char_id}", char_model.name)
+        name_text = SPECIAL_CHAR_NAME.get(
+            f"{char_id}", NAME_ALIAS.get(char_model.name, char_model.name)
+        )
         bar_bg_draw.text((190, 40), name_text, "white", waves_font_24, "lm")
 
         # 属性
