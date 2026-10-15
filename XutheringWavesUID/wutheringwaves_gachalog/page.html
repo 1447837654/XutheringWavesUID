@@ -494,7 +494,7 @@ function poolMarks(pool) {
     if (best.wai >= 3) tags.push(['wai', `最长<b>${best.wai}</b>连歪`]);
   }
   const byTime = {};
-  pool.five_stars.forEach(fs => { if (fs.time) (byTime[fs.time] = byTime[fs.time] || []).push(fs); });
+  pool.five_stars.forEach(fs => { if (fs.time && fs.ten !== false) (byTime[fs.time] = byTime[fs.time] || []).push(fs); });
   const multi = {};
   Object.values(byTime).forEach(g => {
     if (g.length < 2) return;
