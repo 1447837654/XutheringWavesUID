@@ -237,6 +237,7 @@ button { font: inherit; color: inherit; }
 .tray-item { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 2px 8px 2px 2px; border-radius: 8px; background: rgba(179, 148, 242, .08); box-shadow: inset 0 0 0 1px rgba(179, 148, 242, .22); }
 .tray-item .ic { width: 24px; height: 24px; border-radius: 6px; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 50% 90%, rgba(179, 148, 242, .55), #1d1a2e 70%); }
 .tray-item .ic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fs-icon img.wp, .tray-item .ic img.wp { object-fit: contain; padding: 12%; }
 .tray-item .ic .pl { font-size: 11px; color: var(--purple); }
 .tray-item .ct { font-family: var(--num); font-size: 12.5px; color: var(--purple); }
 
@@ -329,6 +330,8 @@ button { font: inherit; color: inherit; }
 .export-mode .pity-bar > i::after, .export-mode .ava .ring { animation: none !important; }
 .export-mode .pity-bar > i::after { display: none; }
 .export-mode #app { background: var(--bg0); }
+.export-mode .tag-pill.wai { box-shadow: none; border: 1px solid rgba(240, 137, 155, .4); }
+.export-mode .tray-item { box-shadow: none; border: 1px solid rgba(179, 148, 242, .22); }
 .export-mode .hero, .export-mode .ov, .export-mode .fs-pkg { box-shadow: none; border: 1px solid var(--line); }
 </style>
 <style>
@@ -471,13 +474,20 @@ function poolMarks(pool) {
   const tags = [];
   if (POOL_LIMITED.has(pool.name) && pool.name.indexOf('武器') < 0) {
     const asc = pool.five_stars.slice().reverse();
+    // 歪 + 随后的保底 UP 记作一次大保底
+    const units = [];
+    for (let i = 0; i < asc.length; i++) {
+      if (asc[i].is_up) units.push({ k: 'up', last: asc[i] });
+      else if (i + 1 < asc.length && asc[i + 1].is_up) units.push({ k: 'wai', last: asc[++i] });
+      else units.push({ k: 'wai', last: asc[i] });
+    }
     const best = { up: 0, wai: 0 };
-    for (let i = 0; i < asc.length;) {
+    for (let i = 0; i < units.length;) {
       let j = i;
-      while (j + 1 < asc.length && !!asc[j + 1].is_up === !!asc[i].is_up) j++;
-      const len = j - i + 1, k = asc[i].is_up ? 'up' : 'wai';
+      while (j + 1 < units.length && units[j + 1].k === units[i].k) j++;
+      const len = j - i + 1, k = units[i].k;
       best[k] = Math.max(best[k], len);
-      if (len >= 3) add(asc[j], k, `${len}连${k === 'up' ? 'UP' : '歪'}`);
+      if (len >= 3) add(units[j].last, k, `${len}连${k === 'up' ? 'UP' : '歪'}`);
       i = j + 1;
     }
     if (best.up >= 3) tags.push(['up', `最长<b>${best.up}</b>连UP`]);
@@ -532,7 +542,7 @@ function avatarHTML(item) {
   const placeholder = (item.name || '?').slice(0, 1);
   if (!ridSafe) return `<div class="pl">${esc(placeholder)}</div>`;
   // onerror 里的字符串通过 dataset 传递, 避免把 placeholder 拼进 JS 字面量造成注入
-  return `<img src="${esc(url)}" alt="${esc(item.name || '')}" loading="lazy"
+  return `<img src="${esc(url)}"${isWeapon ? ' class="wp"' : ''} alt="${esc(item.name || '')}" loading="lazy"
     data-pl="${esc(placeholder)}"
     onerror="var d=document.createElement('div');d.className='pl';d.textContent=this.dataset.pl||'?';this.replaceWith(d)">`;
 }
