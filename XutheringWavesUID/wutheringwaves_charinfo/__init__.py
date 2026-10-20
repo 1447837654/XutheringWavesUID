@@ -58,6 +58,29 @@ def _concat_pk_images(im1, im2):
     return new_im
 
 
+def _has_phantom(role_detail) -> bool:
+    """面板是否有声骸数据(有则出伤害计算部分)。"""
+    pd = getattr(role_detail, "phantomData", None)
+    eq = pd.equipPhantomList if pd else None
+    return bool(eq) and any(p and p.phantomProp for p in eq)
+
+
+def _has_full_phantom(role_detail) -> bool:
+    """面板是否装满 5 件声骸。"""
+    pd = getattr(role_detail, "phantomData", None)
+    eq = pd.equipPhantomList if pd else None
+    return bool(eq) and sum(1 for p in eq if p and p.phantomProp) >= 5
+
+
+def _is_phantom_change(change_list_regex) -> bool:
+    """替换指令是否含换声骸。"""
+    if not change_list_regex:
+        return False
+    from .role_info_change import ReplacePhantom
+
+    return any(f"换{p}" in change_list_regex for p in ReplacePhantom.PREFIX_RE)
+
+
 def _space_hint() -> str:
     return f"[鸣潮] 尝试去掉{PREFIX}后的空格重试"
 
@@ -312,7 +335,11 @@ async def _forward_upload_to_master(bot: Bot, ev: Event):
         get_image,
         _fetch_image_bytes,
     )
-    from .upload_card import check_image_dimensions, collect_blocked_duplicates
+    from .upload_card import (
+        check_image_dimensions,
+        collect_blocked_duplicates,
+        collect_pending_duplicates,
+    )
 
     images = await get_image(ev)
     if not images:
@@ -361,6 +388,11 @@ async def _forward_upload_to_master(bot: Bot, ev: Event):
             return await bot.send("[鸣潮] 上传图片下载失败，请稍后重试")
 
         block_msgs, blocked_paths = collect_blocked_duplicates(temp_dir, new_images)
+        pending_msgs, pending_blocked = collect_pending_duplicates(
+            target_type, char_id, new_images, skip=blocked_paths
+        )
+        block_msgs += pending_msgs
+        blocked_paths |= pending_blocked
         if blocked_paths:
             # 重复的清掉，不重复的继续转发
             for p in blocked_paths:
@@ -541,6 +573,8 @@ async def send_one_char_detail_msg(bot: Bot, ev: Event):
     if refresh_behavior == "concat_diff":
         from ..utils.char_info_utils import get_char_detail_for_id
         old_detail = await get_char_detail_for_id(uid, char_id)
+        if old_detail is not None and not _has_phantom(old_detail):
+            old_detail = None
 
     buttons = []
     msg, num_updated, _top_improver = await draw_refresh_char_detail_img(bot, ev, user_id, uid, buttons, refresh_type)
@@ -800,7 +834,28 @@ async def send_char_detail_msg2(bot: Bot, ev: Event):
         if _ru is None:
             return
         uid, user_id = _ru
-        im = await draw_char_detail_img(ev, uid, char, user_id, waves_id, change_list_regex=change_list_regex)
+        # 换声骸且原面板 5 件齐全: 替换前后左右拼接对比 (同刷新 concat_diff)
+        old_im = None
+        if not waves_id and _is_phantom_change(change_list_regex):
+            from ..utils.char_info_utils import get_char_detail_for_id
+
+            char_id = char_name_to_char_id(matched)
+            old_detail = await get_char_detail_for_id(uid, char_id) if char_id else None
+            if old_detail is not None and _has_full_phantom(old_detail):
+                old_im = await draw_char_detail_img(
+                    ev, uid, char, user_id, None, need_convert_img=False, role_detail_override=old_detail
+                )
+        if isinstance(old_im, Image.Image):
+            new_im = await draw_char_detail_img(
+                ev, uid, char, user_id, waves_id, need_convert_img=False, change_list_regex=change_list_regex
+            )
+            if isinstance(new_im, Image.Image):
+                diff_im = await convert_img(await _concat_pk_images(old_im, new_im))
+                await bot.send(_append_advice(ev, res.wrap(diff_im, canonical_cmd)), False)
+                return
+            im = new_im
+        else:
+            im = await draw_char_detail_img(ev, uid, char, user_id, waves_id, change_list_regex=change_list_regex)
         at_sender = False
         if isinstance(im, str):
             await bot.send(_append_advice(ev, res.with_tip(im, canonical_cmd)), at_sender)

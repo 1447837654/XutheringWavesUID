@@ -11,6 +11,7 @@ from gsuid_core.utils.image.image_tools import crop_center_img
 from ..utils.hint import error_reply
 from ..utils.util import hide_uid, get_hide_uid_pref
 from ..utils.image import (
+    paste_masked_avatar,
     GREY,
     CHAIN_COLOR,
     SPECIAL_GOLD,
@@ -94,6 +95,7 @@ async def draw_char_list_img(
     is_peek: bool = False,
     user_waves_id: str = "",
     star_filter: Optional[str] = None,
+    col: Optional[int] = None,
 ) -> Union[str, bytes]:
     is_self_ck, ck = await waves_api.get_ck_result(user_waves_id, user_id, ev.bot_id)
     if not ck:
@@ -137,7 +139,7 @@ async def draw_char_list_img(
     if not display_rank:
         return "[鸣潮] 暂无对应星级的角色"
 
-    two_col = total_count > 60
+    two_col = col == 2 if col else total_count > 50
 
     # 头像 头像环
     avatar = await draw_pic_with_ring(ev, is_peek)
@@ -314,8 +316,8 @@ def _render_bar(asset) -> Image.Image:
     rc = WEAPON_RESONLEVEL_COLOR[weaponData.resonLevel]
     if 0.299 * rc[0] + 0.587 * rc[1] + 0.114 * rc[2] > 135:
         rc = tuple(int(c * 0.6) for c in rc)
-    weapon_bg_temp_draw.rounded_rectangle([110, 102, 168, 132], radius=8, fill=rc + (int(0.85 * 255),))  # type: ignore
-    weapon_bg_temp_draw.text((139, 117), f"{weaponData.resonLevel}阶", "white", waves_font_24, "mm")
+    weapon_bg_temp_draw.rounded_rectangle([112, 95, 170, 125], radius=8, fill=rc + (int(0.85 * 255),))  # type: ignore
+    weapon_bg_temp_draw.text((141, 110), f"{weaponData.resonLevel}阶", "white", waves_font_24, "mm")
 
     bar_star.alpha_composite(weapon_bg_temp.resize((260, 130)), dest=(710, 25))
 
@@ -405,7 +407,7 @@ def _compose_char_list(
 
     if two_col:
         hint_draw = ImageDraw.Draw(card_img)
-        hint = f"可指定  {PREFIX}练度统计 五星/四星/全部"
+        hint = f"可指定  {PREFIX}练度统计 五星/四星/全部  1/2 单列/双列"
         hint_draw.text((width // 2, header_h + rows * bar_star_h + 35), hint, SPECIAL_GOLD, waves_font_24, "mm")
 
     card_img = add_footer(card_img)
@@ -420,9 +422,7 @@ async def draw_pic_with_ring(ev: Event, is_peek: bool = False):
 
     mask_pic = Image.open(TEXT_PATH / "avatar_mask.png")
     img = Image.new("RGBA", (180, 180))
-    mask = mask_pic.resize((160, 160))
-    resize_pic = crop_center_img(pic, 160, 160)
-    img.paste(resize_pic, (20, 20), mask)
+    paste_masked_avatar(img, pic, mask_pic, 160, (20, 20))
 
     return img
 

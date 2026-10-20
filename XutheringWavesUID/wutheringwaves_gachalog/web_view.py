@@ -10,6 +10,7 @@ import asyncio
 import json
 import secrets
 from typing import Dict, List, Optional, Tuple
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from gsuid_core.web_app import app
 from ..utils.api.model import AccountBaseInfo
 from ..utils.cache import TimedCache
 from ..utils.image import is_qq_default_avatar
-from ..utils.util import hide_uid
+from ..utils.util import get_hide_uid_pref, hide_uid
 from ..utils.player_store import read_player_json, player_json_exists
 from ..utils.resource.RESOURCE_PATH import (
     AVATAR_PATH,
@@ -58,7 +59,8 @@ def feature_disabled_msg() -> str:
 
 async def _build_account_info(uid: str, ev: Event) -> Dict:
     """尽力获取账号基础信息，失败回退到仅 uid。"""
-    info: Dict = {"uid": hide_uid(uid)}
+    user_pref = await get_hide_uid_pref(uid, ev.user_id, ev.bot_id)
+    info: Dict = {"uid": hide_uid(uid, user_pref)}
     # 优先：core 适配器传入的 avatar URL（QQ 官方 / Discord / KOOK 等都会带）
     sender_avatar = (ev.sender or {}).get("avatar") or ""
     if isinstance(sender_avatar, str) and sender_avatar.startswith(("http://", "https://")):
@@ -67,7 +69,7 @@ async def _build_account_info(uid: str, ev: Event) -> Dict:
     if ev.bot_id == "onebot" and str(ev.user_id).isdigit():
         info["qq_avatar"] = f"//q1.qlogo.cn/g?b=qq&nk={ev.user_id}&s=640"
     if waves_api.is_net(uid):
-        info["name"] = f"漂泊者·{hide_uid(uid)}"
+        info["name"] = f"漂泊者·{hide_uid(uid, user_pref)}"
         info["is_net"] = True
         return info
     info["is_net"] = False
@@ -326,6 +328,7 @@ def _build_pool_view(name: str, logs: List[Dict]) -> Dict:
     """
     total = len(logs)
     asc = list(reversed(logs))  # 老到新
+    same_time = Counter(log.get("time") for log in logs)
 
     five_stars: List[Dict] = []
     period_4stars: Dict[int, Dict[str, Dict]] = {}
@@ -362,6 +365,7 @@ def _build_pool_view(name: str, logs: List[Dict]) -> Dict:
                     "resourceId": log.get("resourceId"),
                     "resourceType": log.get("resourceType"),
                     "time": log.get("time"),
+                    "ten": same_time[log.get("time")] == 10,
                     "pity": pity,
                     "is_up": is_up,
                 }
